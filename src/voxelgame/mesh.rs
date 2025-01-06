@@ -1,6 +1,8 @@
 use bytemuck::{Pod, Zeroable};
 use wgpu::util::DeviceExt;
 
+use super::draw::Drawable;
+
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
 pub struct Vertex {
@@ -49,8 +51,10 @@ impl Mesh {
             element_count: indices.len(),
         }
     }
+}
 
-    pub fn draw(&self, render_pass: &mut wgpu::RenderPass) {
+impl Drawable for Mesh {
+    fn draw(&self, render_pass: &mut wgpu::RenderPass) {
         // TODO: Move to bundle?
         render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);

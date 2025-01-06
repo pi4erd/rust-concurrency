@@ -1,10 +1,12 @@
 mod texture;
 mod camera;
 mod mesh;
+mod draw;
 
 use std::{collections::HashMap, sync::Arc, time::Instant};
 
 use camera::{Camera, CameraController};
+use draw::{Drawable, Model};
 use mesh::{Mesh, Vertex};
 use pollster::FutureExt;
 use texture::Texture;
@@ -27,7 +29,7 @@ pub struct VoxelGame<'w> {
     start_time: std::time::Instant,
     prev_time: f32,
 
-    meshes: Vec<Mesh>,
+    meshes: Vec<Model<Mesh>>,
     depth_texture: Texture,
 
     pipelines: HashMap<String, wgpu::RenderPipeline>,
@@ -106,16 +108,20 @@ impl<'w> VoxelGame<'w> {
 
         let meshes = vec![
             // Test mesh
-            Mesh::create(
+            Model::new(
+                &bind_layouts["model"],
                 &device,
-                &[
-                    Vertex { position: [0.0, 0.0, 0.0], uv: [0.0, 0.0] },
-                    Vertex { position: [1.0, 0.0, 0.0], uv: [1.0, 0.0] },
-                    Vertex { position: [1.0, 1.0, 0.0], uv: [1.0, 1.0] },
-                    Vertex { position: [0.0, 1.0, 0.0], uv: [0.0, 1.0] },
-                ],
-                &[0, 1, 2, 0, 2, 3],
-            ),
+                Mesh::create(
+                    &device,
+                    &[
+                        Vertex { position: [0.0, 0.0, 0.0], uv: [0.0, 0.0] },
+                        Vertex { position: [1.0, 0.0, 0.0], uv: [1.0, 0.0] },
+                        Vertex { position: [1.0, 1.0, 0.0], uv: [1.0, 1.0] },
+                        Vertex { position: [0.0, 1.0, 0.0], uv: [0.0, 1.0] },
+                    ],
+                    &[0, 1, 2, 0, 2, 3],
+                ),
+            )
         ];
 
         Self {
@@ -162,6 +168,22 @@ impl<'w> VoxelGame<'w> {
         device: &wgpu::Device,
         uniform_buffers: &HashMap<String, wgpu::Buffer>,
     ) -> (HashMap<String, wgpu::BindGroup>, HashMap<String, wgpu::BindGroupLayout>) {
+        let model_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("model_bind_layout"),
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }
+            ]
+        });
+
         let camera_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: None,
             entries: &[
@@ -194,6 +216,7 @@ impl<'w> VoxelGame<'w> {
 
         bind_layouts.insert(String::from("camera"), camera_layout);
         bind_groups.insert(String::from("camera"), camera_bind_group);
+        bind_layouts.insert(String::from("model"), model_layout);
 
         (bind_groups, bind_layouts)
     }
@@ -209,7 +232,10 @@ impl<'w> VoxelGame<'w> {
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
-            bind_group_layouts: &[&bind_layouts["camera"]],
+            bind_group_layouts: &[
+                &bind_layouts["model"],
+                &bind_layouts["camera"],
+            ],
             push_constant_ranges: &[],
         });
         
@@ -241,8 +267,7 @@ impl<'w> VoxelGame<'w> {
                 polygon_mode: wgpu::PolygonMode::Fill,
                 strip_index_format: None,
                 front_face: wgpu::FrontFace::Ccw,
-                // cull_mode: Some(wgpu::Face::Back),
-                cull_mode: None,
+                cull_mode: Some(wgpu::Face::Back),
                 unclipped_depth: false,
                 conservative: false,
             },
@@ -275,10 +300,18 @@ impl<'w> VoxelGame<'w> {
                 self.camera.uniform(),
             ]),
         );
+
+        for mesh in self.meshes.iter() {
+            mesh.update_buffer(&self.queue);
+        }
     }
 
     fn update(&mut self, delta: f32) {
         self.camera_controller.update(&mut self.camera, delta);
+
+        for mesh in self.meshes.iter_mut() {
+            mesh.position += cgmath::Vector3::new(0.1, 0.1, 0.1) * delta;
+        }
     }
 
     fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
@@ -320,7 +353,7 @@ impl<'w> VoxelGame<'w> {
 
             render_pass.set_pipeline(&self.pipelines["opaque"]);
 
-            render_pass.set_bind_group(0, &self.bind_groups["camera"], &[]);
+            render_pass.set_bind_group(1, &self.bind_groups["camera"], &[]);
 
             for mesh in self.meshes.iter() {
                 mesh.draw(&mut render_pass);
