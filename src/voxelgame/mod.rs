@@ -7,6 +7,7 @@ use std::{collections::HashMap, sync::Arc, time::Instant};
 use camera::{Camera, CameraController};
 use mesh::{Mesh, Vertex};
 use pollster::FutureExt;
+use texture::Texture;
 use wgpu::util::DeviceExt;
 use winit::{dpi::PhysicalSize, event::WindowEvent, keyboard::{KeyCode, PhysicalKey}, window::{CursorGrabMode, Window}};
 
@@ -27,6 +28,7 @@ pub struct VoxelGame<'w> {
     prev_time: f32,
 
     meshes: Vec<Mesh>,
+    depth_texture: Texture,
 
     pipelines: HashMap<String, wgpu::RenderPipeline>,
     bind_groups: HashMap<String, wgpu::BindGroup>,
@@ -83,6 +85,12 @@ impl<'w> VoxelGame<'w> {
         let uniform_buffers = Self::create_uniform_buffers(&device, &camera);
         let (bind_groups, bind_layouts) = Self::create_bind_groups(&device, &uniform_buffers);
 
+        let depth_texture = Texture::create_depth_texture(
+            &device,
+            &surface_config,
+            Some("depth_texture")
+        );
+
         let pipelines = Self::create_pipelines(
             &device,
             &surface_config,
@@ -121,6 +129,7 @@ impl<'w> VoxelGame<'w> {
             queue,
 
             meshes,
+            depth_texture,
 
             start_time: Instant::now(),
             prev_time: 0.0,
@@ -242,7 +251,13 @@ impl<'w> VoxelGame<'w> {
                 mask: !0,
                 alpha_to_coverage_enabled: false,
             },
-            depth_stencil: None,
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: Texture::DEPTH_FORMAT,
+                depth_write_enabled: true,
+                depth_compare: wgpu::CompareFunction::Less,
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState::default(),
+            }),
             multiview: None,
             cache: None,
         });
@@ -291,7 +306,14 @@ impl<'w> VoxelGame<'w> {
                         }
                     })
                 ],
-                depth_stencil_attachment: None,
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &self.depth_texture.view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: wgpu::StoreOp::Store,
+                    }),
+                    stencil_ops: None,
+                }),
                 timestamp_writes: None,
                 occlusion_query_set: None,
             });
