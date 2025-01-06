@@ -1,0 +1,395 @@
+mod texture;
+mod camera;
+mod mesh;
+
+use std::{collections::HashMap, sync::Arc, time::Instant};
+
+use camera::{Camera, CameraController};
+use mesh::{Mesh, Vertex};
+use pollster::FutureExt;
+use wgpu::util::DeviceExt;
+use winit::{dpi::PhysicalSize, event::WindowEvent, keyboard::{KeyCode, PhysicalKey}, window::{CursorGrabMode, Window}};
+
+use crate::window::Game;
+
+#[allow(dead_code)]
+pub struct VoxelGame<'w> {
+    window: Arc<Window>,
+
+    instance: wgpu::Instance,
+    surface: wgpu::Surface<'w>,
+    surface_config: wgpu::SurfaceConfiguration,
+    adapter: wgpu::Adapter,
+    device: wgpu::Device,
+    queue: wgpu::Queue,
+
+    start_time: std::time::Instant,
+    prev_time: f32,
+
+    meshes: Vec<Mesh>,
+
+    pipelines: HashMap<String, wgpu::RenderPipeline>,
+    bind_groups: HashMap<String, wgpu::BindGroup>,
+    uniform_buffers: HashMap<String, wgpu::Buffer>,
+    camera: Camera,
+    camera_controller: CameraController,
+}
+
+impl<'w> VoxelGame<'w> {
+    pub async fn new(window: Arc<Window>) -> Self {
+        let size = window.inner_size();
+
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+            backends: wgpu::Backends::VULKAN,
+            flags: wgpu::InstanceFlags::VALIDATION,
+            ..Default::default()
+        });
+
+        let surface = instance.create_surface(window.clone())
+            .expect("Failed to create window");
+
+        let adapter = instance.request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::HighPerformance,
+            compatible_surface: Some(&surface),
+            force_fallback_adapter: false,
+        }).await.expect("Failed to request adapter");
+
+        let (device, queue) = adapter.request_device(&wgpu::DeviceDescriptor {
+            label: Some("graphics_device"),
+            memory_hints: wgpu::MemoryHints::Performance,
+            required_features: wgpu::Features::empty(),
+            required_limits: wgpu::Limits::default(),
+        }, None).await.expect("Failed to request device");
+
+        let surface_caps = surface.get_capabilities(&adapter);
+        let surface_config = wgpu::SurfaceConfiguration {
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            format: surface_caps.formats.into_iter()
+                .find(|f| f.is_srgb()).expect("No srgb format was available"),
+            width: size.width,
+            height: size.height,
+            present_mode: surface_caps.present_modes.into_iter()
+                .find(|p| *p == wgpu::PresentMode::Mailbox)
+                .unwrap_or(wgpu::PresentMode::Fifo),
+            desired_maximum_frame_latency: 2,
+            alpha_mode: wgpu::CompositeAlphaMode::Opaque,
+            view_formats: vec![],
+        };
+        surface.configure(&device, &surface_config);
+
+        let camera = Camera::new(size.width as f32 / size.height as f32);
+        let camera_controller = CameraController::new(5.0, 0.003);
+
+        let uniform_buffers = Self::create_uniform_buffers(&device, &camera);
+        let (bind_groups, bind_layouts) = Self::create_bind_groups(&device, &uniform_buffers);
+
+        let pipelines = Self::create_pipelines(
+            &device,
+            &surface_config,
+            &bind_layouts,
+        );
+
+        window.set_cursor_visible(false);
+        window.set_cursor_grab(CursorGrabMode::Locked)
+            .unwrap_or_else(
+                |_| window.set_cursor_grab(CursorGrabMode::Confined)
+                    .expect("No cursor confine/lock available.")
+            );
+
+        let meshes = vec![
+            // Test mesh
+            Mesh::create(
+                &device,
+                &[
+                    Vertex { position: [0.0, 0.0, 0.0], uv: [0.0, 0.0] },
+                    Vertex { position: [1.0, 0.0, 0.0], uv: [1.0, 0.0] },
+                    Vertex { position: [1.0, 1.0, 0.0], uv: [1.0, 1.0] },
+                    Vertex { position: [0.0, 1.0, 0.0], uv: [0.0, 1.0] },
+                ],
+                &[0, 1, 2, 0, 2, 3],
+            ),
+        ];
+
+        Self {
+            window,
+
+            instance,
+            surface,
+            surface_config,
+            adapter,
+            device,
+            queue,
+
+            meshes,
+
+            start_time: Instant::now(),
+            prev_time: 0.0,
+
+            pipelines,
+            bind_groups,
+            uniform_buffers,
+            camera,
+            camera_controller,
+        }
+    }
+
+    fn create_uniform_buffers(
+        device: &wgpu::Device,
+        camera: &Camera,
+    ) -> HashMap<String, wgpu::Buffer> {
+        let camera = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("camera"),
+            contents: bytemuck::cast_slice(&[camera.uniform()]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
+        let mut map = HashMap::new();
+        map.insert(String::from("camera"), camera);
+
+        return map;
+    }
+
+    fn create_bind_groups(
+        device: &wgpu::Device,
+        uniform_buffers: &HashMap<String, wgpu::Buffer>,
+    ) -> (HashMap<String, wgpu::BindGroup>, HashMap<String, wgpu::BindGroupLayout>) {
+        let camera_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: None,
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }
+            ],
+        });
+
+        let camera_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: None,
+            layout: &camera_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: uniform_buffers["camera"].as_entire_binding(),
+                }
+            ]
+        });
+
+        let mut bind_layouts = HashMap::new();
+        let mut bind_groups = HashMap::new();
+
+        bind_layouts.insert(String::from("camera"), camera_layout);
+        bind_groups.insert(String::from("camera"), camera_bind_group);
+
+        (bind_groups, bind_layouts)
+    }
+
+    fn create_pipelines(
+        device: &wgpu::Device,
+        surface_config: &wgpu::SurfaceConfiguration,
+        bind_layouts: &HashMap<String, wgpu::BindGroupLayout>,
+    ) -> HashMap<String, wgpu::RenderPipeline> {
+        let mut map = HashMap::new();
+
+        let opaque_module = device.create_shader_module(wgpu::include_wgsl!("shaders/opaque.wgsl"));
+
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: None,
+            bind_group_layouts: &[&bind_layouts["camera"]],
+            push_constant_ranges: &[],
+        });
+        
+        let opaque_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: None,
+            layout: Some(&pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &opaque_module,
+                entry_point: Some("vs_main"),
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                buffers: &[
+                    Vertex::desc(),
+                ],
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &opaque_module,
+                entry_point: Some("fs_main"),
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                targets: &[
+                    Some(wgpu::ColorTargetState {
+                        format: surface_config.format,
+                        blend: None,
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })
+                ]
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                polygon_mode: wgpu::PolygonMode::Fill,
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw,
+                // cull_mode: Some(wgpu::Face::Back),
+                cull_mode: None,
+                unclipped_depth: false,
+                conservative: false,
+            },
+            multisample: wgpu::MultisampleState {
+                count: 1,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+            depth_stencil: None,
+            multiview: None,
+            cache: None,
+        });
+
+        map.insert(String::from("opaque"), opaque_pipeline);
+
+        map
+    }
+
+    fn update_uniform_buffers(&mut self) {
+        self.queue.write_buffer(
+            &self.uniform_buffers["camera"],
+            0,
+            bytemuck::cast_slice(&[
+                self.camera.uniform(),
+            ]),
+        );
+    }
+
+    fn update(&mut self, delta: f32) {
+        self.camera_controller.update(&mut self.camera, delta);
+    }
+
+    fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
+        let time = (std::time::Instant::now() - self.start_time).as_secs_f32();
+        let delta = time - self.prev_time;
+        self.update(delta);
+        self.update_uniform_buffers();
+        self.prev_time = time;
+
+        let image = self.surface.get_current_texture()?;
+
+        let view = image.texture.create_view(&wgpu::TextureViewDescriptor::default());
+        
+        let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        {
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: None,
+                color_attachments: &[
+                    Some(wgpu::RenderPassColorAttachment {
+                        view: &view,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                            store: wgpu::StoreOp::Store,
+                        }
+                    })
+                ],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+
+            render_pass.set_pipeline(&self.pipelines["opaque"]);
+
+            render_pass.set_bind_group(0, &self.bind_groups["camera"], &[]);
+
+            for mesh in self.meshes.iter() {
+                mesh.draw(&mut render_pass);
+            }
+        }
+
+        self.queue.submit(std::iter::once(encoder.finish()));
+
+        self.window.pre_present_notify();
+        image.present();
+
+        Ok(())
+    }
+
+    fn resize(&mut self, new_size: PhysicalSize<u32>) {
+        if new_size.width == 0 || new_size.height == 0 {
+            return;
+        }
+        self.surface_config.width = new_size.width;
+        self.surface_config.height = new_size.height;
+        self.surface.configure(&self.device, &self.surface_config);
+        self.camera.change_aspect(
+            new_size.width as f32 / new_size.height as f32,
+        );
+    }
+}
+
+impl<'w> Game for VoxelGame<'w> {
+    fn init(window: Arc<Window>) -> Self {
+        Self::new(window).block_on()
+    }
+    
+    fn window_event(
+        &mut self,
+        event_loop: &winit::event_loop::ActiveEventLoop,
+        _window_id: winit::window::WindowId,
+        event: winit::event::WindowEvent,
+    ) {
+        self.camera_controller.process_window_events(&event);
+        match event {
+            WindowEvent::CloseRequested => event_loop.exit(),
+            WindowEvent::RedrawRequested => {
+                self.window.request_redraw();
+
+                match self.render() {
+                    Ok(()) => {}
+                    Err(
+                        wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated
+                    ) => self.resize(PhysicalSize::new(
+                        self.surface_config.width,
+                        self.surface_config.height,
+                    )),
+                    Err(wgpu::SurfaceError::Timeout) => {
+                        log::warn!("Surface timeout!");
+                    }
+                    Err(wgpu::SurfaceError::OutOfMemory) => {
+                        log::error!("Surface out of memory!");
+                        event_loop.exit();
+                    }
+                }
+            }
+            WindowEvent::Resized(new_size) => {
+                self.resize(new_size);
+            }
+            WindowEvent::KeyboardInput { event, .. } => {
+                if event.state.is_pressed() {
+                    match event.physical_key {
+                        PhysicalKey::Code(KeyCode::Escape) => event_loop.exit(),
+                        PhysicalKey::Code(KeyCode::KeyF) => {
+                            self.window.set_fullscreen(match self.window.fullscreen() {
+                                Some(_) => None,
+                                None => Some(winit::window::Fullscreen::Borderless(None)),
+                            });
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    
+    fn device_event(
+        &mut self,
+        _event_loop: &winit::event_loop::ActiveEventLoop,
+        _device_id: winit::event::DeviceId,
+        event: winit::event::DeviceEvent,
+    ) {
+        self.camera_controller.process_device_events(&event);
+    }
+    
+    fn about_to_wait(&mut self, _event_loop: &winit::event_loop::ActiveEventLoop) {
+    }
+}
