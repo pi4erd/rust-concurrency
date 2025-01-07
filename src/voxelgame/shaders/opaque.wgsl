@@ -21,7 +21,7 @@ struct Model {
 @group(0) @binding(0)
 var<uniform> model: Model;
 
-@group(1) @binding(0)
+@group(2) @binding(0)
 var<uniform> camera: Camera;
 
 @vertex
@@ -32,7 +32,13 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     return out;
 }
 
+@group(1) @binding(0)
+var t_diffuse: texture_2d<f32>;
+@group(1) @binding(1)
+var t_sampler: sampler;
+
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    return vec4(in.texCoord, 1.0, 1.0);
+    let texture_sample = textureSample(t_diffuse, t_sampler, in.texCoord);
+    return vec4(texture_sample.rgb, 1.0);
 }

@@ -21,8 +21,8 @@ impl Camera {
             eye: Point3::new(0.0, 0.0, 1.0),
             direction: Vector3::unit_z(),
             up: Vector3::unit_y(),
-            near: 0.1,
-            far: 1000.0,
+            near: 0.01,
+            far: 3000.0,
             aspect,
         }
     }
@@ -44,7 +44,7 @@ impl Camera {
     }
 
     pub fn projection(&self, aspect: f32) -> Matrix4<f32> {
-        cgmath::perspective(cgmath::Rad(std::f32::consts::FRAC_PI_3), aspect, self.near, self.far)
+        cgmath::perspective(cgmath::Rad(std::f32::consts::FRAC_PI_2), aspect, self.near, self.far)
     }
 
     pub fn uniform(&self) -> CameraUniform {

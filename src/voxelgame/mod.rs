@@ -2,14 +2,16 @@ mod texture;
 mod camera;
 mod mesh;
 mod draw;
+mod generator;
 
 use std::{collections::HashMap, sync::Arc, time::Instant};
 
 use camera::{Camera, CameraController};
 use draw::{Drawable, Model};
+use generator::{chunk::ChunkCoord, NoiseGenerator, World};
 use mesh::{Mesh, Vertex};
 use pollster::FutureExt;
-use texture::Texture;
+use texture::Texture2d;
 use wgpu::util::DeviceExt;
 use winit::{dpi::PhysicalSize, event::WindowEvent, keyboard::{KeyCode, PhysicalKey}, window::{CursorGrabMode, Window}};
 
@@ -30,11 +32,14 @@ pub struct VoxelGame<'w> {
     prev_time: f32,
 
     meshes: Vec<Model<Mesh>>,
-    depth_texture: Texture,
+    depth_texture: Texture2d,
+    world: World<NoiseGenerator>,
 
     pipelines: HashMap<String, wgpu::RenderPipeline>,
     bind_groups: HashMap<String, wgpu::BindGroup>,
+    bind_layouts: HashMap<String, wgpu::BindGroupLayout>,
     uniform_buffers: HashMap<String, wgpu::Buffer>,
+    textures: HashMap<String, Texture2d>,
     camera: Camera,
     camera_controller: CameraController,
 }
@@ -45,7 +50,7 @@ impl<'w> VoxelGame<'w> {
 
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends: wgpu::Backends::VULKAN,
-            flags: wgpu::InstanceFlags::VALIDATION,
+            flags: wgpu::InstanceFlags::default(),
             ..Default::default()
         });
 
@@ -85,9 +90,10 @@ impl<'w> VoxelGame<'w> {
         let camera_controller = CameraController::new(5.0, 0.003);
 
         let uniform_buffers = Self::create_uniform_buffers(&device, &camera);
-        let (bind_groups, bind_layouts) = Self::create_bind_groups(&device, &uniform_buffers);
+        let textures = Self::create_textures(&device, &queue);
+        let (bind_groups, bind_layouts) = Self::create_bind_groups(&device, &uniform_buffers, &textures);
 
-        let depth_texture = Texture::create_depth_texture(
+        let depth_texture = Texture2d::create_depth_texture(
             &device,
             &surface_config,
             Some("depth_texture")
@@ -124,6 +130,16 @@ impl<'w> VoxelGame<'w> {
             )
         ];
 
+        let mut world = World::new(NoiseGenerator::new(69420));
+        
+        for x in -2..=2 {
+            for z in -2..=2 {
+                for y in -2..=2 {
+                    world.generate_chunk(ChunkCoord { x, y, z });
+                }
+            }
+        }
+
         Self {
             window,
 
@@ -135,14 +151,17 @@ impl<'w> VoxelGame<'w> {
             queue,
 
             meshes,
-            depth_texture,
+            depth_texture, // TODO: Move depth texture to textures hashmap
+            world,
 
             start_time: Instant::now(),
             prev_time: 0.0,
 
             pipelines,
             bind_groups,
+            bind_layouts,
             uniform_buffers,
+            textures,
             camera,
             camera_controller,
         }
@@ -164,9 +183,28 @@ impl<'w> VoxelGame<'w> {
         return map;
     }
 
+    fn create_textures(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+    ) -> HashMap<String, Texture2d> {
+        let terrain_texture = Texture2d::from_image_bytes(
+            include_bytes!("../../assets/textureatlas.png"),
+            device,
+            queue,
+            Some("terrain_texture")
+        ).expect("Failed to load image");
+
+        let mut textures = HashMap::new();
+
+        textures.insert(String::from("terrain"), terrain_texture);
+
+        textures
+    }
+
     fn create_bind_groups(
         device: &wgpu::Device,
         uniform_buffers: &HashMap<String, wgpu::Buffer>,
+        textures: &HashMap<String, Texture2d>,
     ) -> (HashMap<String, wgpu::BindGroup>, HashMap<String, wgpu::BindGroupLayout>) {
         let model_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("model_bind_layout"),
@@ -200,6 +238,28 @@ impl<'w> VoxelGame<'w> {
             ],
         });
 
+        let texture_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: None,
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+            ]
+        });
+
         let camera_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: None,
             layout: &camera_layout,
@@ -211,12 +271,29 @@ impl<'w> VoxelGame<'w> {
             ]
         });
 
+        let terrain_texture_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: None,
+            layout: &texture_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&textures["terrain"].view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&textures["terrain"].sampler),
+                },
+            ]
+        });
+
         let mut bind_layouts = HashMap::new();
         let mut bind_groups = HashMap::new();
 
         bind_layouts.insert(String::from("camera"), camera_layout);
         bind_groups.insert(String::from("camera"), camera_bind_group);
         bind_layouts.insert(String::from("model"), model_layout);
+        bind_layouts.insert(String::from("texture"), texture_layout);
+        bind_groups.insert(String::from("terrain_texture"), terrain_texture_group);
 
         (bind_groups, bind_layouts)
     }
@@ -234,6 +311,7 @@ impl<'w> VoxelGame<'w> {
             label: None,
             bind_group_layouts: &[
                 &bind_layouts["model"],
+                &bind_layouts["texture"],
                 &bind_layouts["camera"],
             ],
             push_constant_ranges: &[],
@@ -277,7 +355,7 @@ impl<'w> VoxelGame<'w> {
                 alpha_to_coverage_enabled: false,
             },
             depth_stencil: Some(wgpu::DepthStencilState {
-                format: Texture::DEPTH_FORMAT,
+                format: Texture2d::DEPTH_FORMAT,
                 depth_write_enabled: true,
                 depth_compare: wgpu::CompareFunction::Less,
                 stencil: wgpu::StencilState::default(),
@@ -312,6 +390,8 @@ impl<'w> VoxelGame<'w> {
         for mesh in self.meshes.iter_mut() {
             mesh.position += cgmath::Vector3::new(0.1, 0.1, 0.1) * delta;
         }
+
+        self.world.dequeue_meshgen(&self.device, &self.queue, &self.bind_layouts["model"]);
     }
 
     fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
@@ -353,11 +433,14 @@ impl<'w> VoxelGame<'w> {
 
             render_pass.set_pipeline(&self.pipelines["opaque"]);
 
-            render_pass.set_bind_group(1, &self.bind_groups["camera"], &[]);
+            render_pass.set_bind_group(1, &self.bind_groups["terrain_texture"], &[]);
+            render_pass.set_bind_group(2, &self.bind_groups["camera"], &[]);
 
             for mesh in self.meshes.iter() {
                 mesh.draw(&mut render_pass);
             }
+
+            self.world.draw(&mut render_pass);
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
@@ -378,6 +461,7 @@ impl<'w> VoxelGame<'w> {
         self.camera.change_aspect(
             new_size.width as f32 / new_size.height as f32,
         );
+        self.depth_texture = Texture2d::create_depth_texture(&self.device, &self.surface_config, Some("depth_texture"));
     }
 }
 

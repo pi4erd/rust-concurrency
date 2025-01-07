@@ -45,6 +45,8 @@ impl Mesh {
             usage: wgpu::BufferUsages::INDEX,
         });
 
+        log::debug!("Created model with {} vertices and {} triangles.", vertices.len(), indices.len());
+
         Self {
             vertex_buffer,
             index_buffer,
