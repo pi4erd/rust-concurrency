@@ -1,12 +1,12 @@
 use std::collections::{HashMap, VecDeque};
 
-use cgmath::Zero;
+use cgmath::{MetricSpace, Zero};
 use chunk::{Chunk, ChunkCoord, CHUNK_SIZE};
 use meshgen::generate_model;
 use noise::{Fbm, NoiseFn};
 use voxel::{Blocks, Voxel};
 
-use super::{debug::{DebugDrawer, ModelName}, draw::{Drawable, Model}, mesh::Mesh};
+use super::{camera::Camera, debug::{DebugDrawer, ModelName}, draw::{Drawable, Model}, mesh::Mesh};
 
 pub mod chunk;
 pub mod voxel;
@@ -17,7 +17,7 @@ pub trait Generator {
 }
 
 struct NoiseSampler {
-    noise: Fbm<noise::SuperSimplex>,
+    noise: Fbm<noise::Simplex>,
 }
 
 impl NoiseSampler {
@@ -27,11 +27,11 @@ impl NoiseSampler {
         }
     }
 
-    pub fn sample(&self, chunk_coord: ChunkCoord, x: f64, y: f64, z: f64) -> f64 {
+    pub fn sample(&self, chunk_coord: ChunkCoord, x: f64, y: f64, z: f64, scale: f64) -> f64 {
         self.noise.get([
-            (chunk_coord.x as f64 * CHUNK_SIZE.0 as f64) + x,
-            (chunk_coord.y as f64 * CHUNK_SIZE.1 as f64) + y,
-            (chunk_coord.z as f64 * CHUNK_SIZE.2 as f64) + z,
+            ((chunk_coord.x as f64 * CHUNK_SIZE.0 as f64) + x) * scale,
+            ((chunk_coord.y as f64 * CHUNK_SIZE.1 as f64) + y) * scale,
+            ((chunk_coord.z as f64 * CHUNK_SIZE.2 as f64) + z) * scale,
         ])
     }
 }
@@ -50,29 +50,18 @@ impl NoiseGenerator {
 
 impl Generator for NoiseGenerator {
     fn generate(&self, chunk: &mut Chunk) {
-        const SCALE: f32 = 2.0;
+        const SCALE: f64 = 0.05;
 
         for x in 0..CHUNK_SIZE.0 {
-            for y in 0..CHUNK_SIZE.1 {
-                for z in 0..CHUNK_SIZE.2 {
-                    let wx = chunk.coord.x as f32 + x as f32 / CHUNK_SIZE.0 as f32;
-                    let wy = chunk.coord.y as f32 + y as f32 / CHUNK_SIZE.1 as f32;
-                    let wz = chunk.coord.z as f32 + z as f32 / CHUNK_SIZE.2 as f32;
+            for z in 0..CHUNK_SIZE.2 {
+                let sample = (self.sampler.sample(
+                    chunk.coord,
+                    x as f64, 0.0, z as f64,
+                    SCALE
+                ) / 2.0 + 0.5) * 30.0 + 10.0;
 
-                    if wy > 2.0 {
-                        continue;
-                    }
-
-                    let si = (1.0 + f32::sin(wx * SCALE)) * 0.5;
-                    let co = (1.0 + f32::cos(wz * SCALE)) * 0.5;
-                    let siy = (1.0 + f32::sin(wy * SCALE)) * 0.5;
-
-                    if si + co + siy < 1.0 {
-                        chunk.set_voxel(
-                            x as usize, y as usize, z as usize,
-                            Blocks::STONE.default_state()
-                        );
-                    }
+                for y in 0..sample as usize {
+                    chunk.set_voxel(x, y, z, Blocks::STONE.default_state());
                 }
             }
         }
@@ -160,12 +149,22 @@ impl<T> World<T> {
     pub fn append_debug(
         &self,
         debug: &mut DebugDrawer,
+        observer: &Camera,
         model_bg_layout: &wgpu::BindGroupLayout,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) {
         for (coord, _) in self.models.iter() {
-            let position = coord.to_world();
+            let position: cgmath::Vector3<f32> = coord.to_world();
+            let point: cgmath::Point3<f32> = cgmath::Point3::new(
+                position.x,
+                position.y,
+                position.z
+            );
+
+            if point.distance(observer.eye) > 80.0 {
+                continue;
+            }
             let scale = cgmath::Vector3::new(
                 CHUNK_SIZE.0 as f32,
                 CHUNK_SIZE.1 as f32,

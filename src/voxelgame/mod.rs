@@ -120,9 +120,7 @@ impl<'w> VoxelGame<'w> {
         
         for x in -5..=5 {
             for z in -5..=5 {
-                for y in -5..=5 {
-                    world.generate_chunk(ChunkCoord { x, y, z });
-                }
+                world.generate_chunk(ChunkCoord { x, y: 0, z });
             }
         }
 
@@ -423,12 +421,13 @@ impl<'w> VoxelGame<'w> {
         self.update_uniform_buffers();
 
         self.debug.new_frame();
-        // self.world.append_debug(
-        //     &mut self.debug,
-        //     &self.bind_layouts["model"],
-        //     &self.device,
-        //     &self.queue,
-        // );
+        self.world.append_debug(
+            &mut self.debug,
+            &self.camera,
+            &self.bind_layouts["model"],
+            &self.device,
+            &self.queue,
+        );
     }
 
     fn render(&mut self) -> Result<(), wgpu::SurfaceError> {

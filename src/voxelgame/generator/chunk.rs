@@ -25,7 +25,7 @@ impl Display for ChunkCoord {
     }
 }
 
-pub const CHUNK_SIZE: (usize, usize, usize) = (16, 16, 16);
+pub const CHUNK_SIZE: (usize, usize, usize) = (16, 64, 16);
 const CHUNK_SIZE_ITEMS: usize = CHUNK_SIZE.0 * CHUNK_SIZE.1 * CHUNK_SIZE.2;
 
 #[derive(Clone, Debug)]

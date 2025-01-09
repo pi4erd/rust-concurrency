@@ -6,12 +6,12 @@ use winit::{
 };
 
 pub struct Camera {
-    eye: Point3<f32>,
-    direction: Vector3<f32>,
-    up: Vector3<f32>,
-    near: f32,
-    far: f32,
-    aspect: f32,
+    pub eye: Point3<f32>,
+    pub direction: Vector3<f32>,
+    pub up: Vector3<f32>,
+    pub near: f32,
+    pub far: f32,
+    pub aspect: f32,
 }
 
 #[allow(dead_code)]
