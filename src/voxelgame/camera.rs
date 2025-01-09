@@ -102,6 +102,8 @@ pub struct CameraController {
     horizontal: Axis,
     vertical: Axis,
     qe_axis: Axis,
+    updown_axis: Axis,
+    arrowkey_axis: Axis,
 }
 
 impl CameraController {
@@ -113,6 +115,8 @@ impl CameraController {
             horizontal: Axis::new(KeyCode::KeyA, KeyCode::KeyD),
             vertical: Axis::new(KeyCode::KeyW, KeyCode::KeyS),
             qe_axis: Axis::new(KeyCode::KeyQ, KeyCode::KeyE),
+            updown_axis: Axis::new(KeyCode::ShiftLeft, KeyCode::Space),
+            arrowkey_axis: Axis::new(KeyCode::ArrowDown, KeyCode::ArrowUp),
         }
     }
 
@@ -122,6 +126,10 @@ impl CameraController {
                 self.horizontal.process(event);
                 self.vertical.process(event);
                 self.qe_axis.process(event);
+                self.updown_axis.process(event);
+                self.arrowkey_axis.process(event);
+
+                self.speed *= 1.0 + self.arrowkey_axis.get() * 0.2;
             }
             WindowEvent::MouseWheel { delta, .. } => {
                 match delta {
@@ -160,6 +168,7 @@ impl CameraController {
         let movement = (
                 self.horizontal.get() * camera.right()
                 + self.vertical.get() * camera.direction
+                + self.updown_axis.get() * camera.up()
             ).normalize()
             * self.speed
             * delta;
@@ -169,8 +178,9 @@ impl CameraController {
         //     cgmath::Rad(-self.qe_axis.get() * delta)
         // ) * camera.up;
 
-        if self.horizontal.get() != 0.0 || self.vertical.get() != 0.0 {
-            camera.eye += movement;
+        if self.horizontal.get() != 0.0 || self.vertical.get() != 0.0 ||
+            self.updown_axis.get() != 0.0 {
+                camera.eye += movement;
         }
     }
 }

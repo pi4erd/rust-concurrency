@@ -25,7 +25,7 @@ impl Display for ChunkCoord {
     }
 }
 
-pub const CHUNK_SIZE: (usize, usize, usize) = (20, 20, 20);
+pub const CHUNK_SIZE: (usize, usize, usize) = (16, 16, 16);
 const CHUNK_SIZE_ITEMS: usize = CHUNK_SIZE.0 * CHUNK_SIZE.1 * CHUNK_SIZE.2;
 
 #[derive(Clone, Debug)]
@@ -44,10 +44,10 @@ impl Chunk {
 
     pub fn get_voxel(&self, x: usize, y: usize, z: usize) -> Option<Voxel> {
         if x >= CHUNK_SIZE.0 || y >= CHUNK_SIZE.1 || z >= CHUNK_SIZE.2 {
-            return None;
+            return None
         }
 
-        Some(self.chunk_data[x + z * CHUNK_SIZE.0 + y * (CHUNK_SIZE.0 * CHUNK_SIZE.2)])
+        self.chunk_data.get(x + y * CHUNK_SIZE.0 + (z * CHUNK_SIZE.0 * CHUNK_SIZE.1)).cloned()
     }
 
     #[inline]
@@ -56,6 +56,6 @@ impl Chunk {
             return;
         }
 
-        self.chunk_data[x + z * CHUNK_SIZE.0 + y * (CHUNK_SIZE.0 * CHUNK_SIZE.2)] = voxel;
+        self.chunk_data[x + y * CHUNK_SIZE.0 + (z * CHUNK_SIZE.0 * CHUNK_SIZE.1)] = voxel;
     }
 }

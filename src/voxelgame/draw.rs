@@ -10,6 +10,7 @@ pub struct Model<T> {
     data: T,
     pub position: cgmath::Vector3<f32>,
     pub rotation: cgmath::Quaternion<f32>,
+    pub scale: cgmath::Vector3<f32>,
     bind_group: wgpu::BindGroup,
     model_buffer: wgpu::Buffer,
 }
@@ -38,6 +39,7 @@ impl<T> Model<T> {
             data,
             position: cgmath::Vector3::new(0.0, 0.0,0.0),
             rotation: cgmath::Quaternion::zero(),
+            scale: cgmath::Vector3::new(1.0, 1.0, 1.0),
             model_buffer,
             bind_group,
         }
@@ -53,7 +55,8 @@ impl<T> Model<T> {
 
     pub fn uniform(&self) -> ModelUniform {
         let model = cgmath::Matrix4::from_translation(self.position) * 
-            cgmath::Matrix4::from_axis_angle(self.rotation.v, cgmath::Rad(self.rotation.s));
+            cgmath::Matrix4::from_axis_angle(self.rotation.v, cgmath::Rad(self.rotation.s))
+            * cgmath::Matrix4::from_nonuniform_scale(self.scale.x, self.scale.y, self.scale.z);
 
         ModelUniform {
             model: model.into(),

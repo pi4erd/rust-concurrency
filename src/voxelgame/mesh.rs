@@ -3,25 +3,45 @@ use wgpu::util::DeviceExt;
 
 use super::draw::Drawable;
 
+pub trait Vertex: Pod + Zeroable {
+    fn attribs() -> &'static [wgpu::VertexAttribute];
+    fn desc() -> wgpu::VertexBufferLayout<'static> {
+        wgpu::VertexBufferLayout {
+            array_stride: std::mem::size_of::<Self>() as u64,
+            step_mode: wgpu::VertexStepMode::Vertex,
+            attributes: Self::attribs(),
+        }
+    }
+}
+
+pub trait Instance: Pod + Zeroable {
+    fn attribs() -> &'static [wgpu::VertexAttribute];
+    fn desc() -> wgpu::VertexBufferLayout<'static> {
+        wgpu::VertexBufferLayout {
+            array_stride: std::mem::size_of::<Self>() as u64,
+            step_mode: wgpu::VertexStepMode::Instance,
+            attributes: Self::attribs(),
+        }
+    }
+}
+
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
-pub struct Vertex {
+pub struct Vertex3d {
     pub position: [f32; 3],
     pub uv: [f32; 2],
 }
 
-impl Vertex {
+impl Vertex3d {
     const ATTRIBS: &'static [wgpu::VertexAttribute] = &wgpu::vertex_attr_array![
         0 => Float32x3,
         1 => Float32x2,
     ];
+}
 
-    pub fn desc() -> wgpu::VertexBufferLayout<'static> {
-        wgpu::VertexBufferLayout {
-            array_stride: std::mem::size_of::<Self>() as u64,
-            step_mode: wgpu::VertexStepMode::Vertex,
-            attributes: Self::ATTRIBS,
-        }
+impl Vertex for Vertex3d {
+    fn attribs() -> &'static [wgpu::VertexAttribute] {
+        Self::ATTRIBS
     }
 }
 
@@ -32,7 +52,7 @@ pub struct Mesh {
 }
 
 impl Mesh {
-    pub fn create(device: &wgpu::Device, vertices: &[Vertex], indices: &[u32]) -> Self {
+    pub fn create(device: &wgpu::Device, vertices: &[impl Vertex], indices: &[u32]) -> Self {
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: None,
             contents: bytemuck::cast_slice(vertices),

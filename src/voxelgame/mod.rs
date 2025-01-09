@@ -3,13 +3,15 @@ mod camera;
 mod mesh;
 mod draw;
 mod generator;
+mod debug;
 
 use std::{collections::HashMap, sync::Arc, time::Instant};
 
 use camera::{Camera, CameraController};
-use draw::{Drawable, Model};
+use debug::{DebugDrawer, DebugVertex};
+use draw::Drawable;
 use generator::{chunk::ChunkCoord, NoiseGenerator, World};
-use mesh::{Mesh, Vertex};
+use mesh::{Vertex, Vertex3d};
 use pollster::FutureExt;
 use texture::Texture2d;
 use wgpu::util::DeviceExt;
@@ -31,9 +33,9 @@ pub struct VoxelGame<'w> {
     start_time: std::time::Instant,
     prev_time: f32,
 
-    meshes: Vec<Model<Mesh>>,
     depth_texture: Texture2d,
     world: World<NoiseGenerator>,
+    debug: DebugDrawer,
 
     pipelines: HashMap<String, wgpu::RenderPipeline>,
     bind_groups: HashMap<String, wgpu::BindGroup>,
@@ -49,7 +51,8 @@ impl<'w> VoxelGame<'w> {
         let size = window.inner_size();
 
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::VULKAN,
+            backends: wgpu::Backends::VULKAN | wgpu::Backends::DX12 |
+                wgpu::Backends::METAL,
             flags: wgpu::InstanceFlags::default(),
             ..Default::default()
         });
@@ -66,7 +69,7 @@ impl<'w> VoxelGame<'w> {
         let (device, queue) = adapter.request_device(&wgpu::DeviceDescriptor {
             label: Some("graphics_device"),
             memory_hints: wgpu::MemoryHints::Performance,
-            required_features: wgpu::Features::empty(),
+            required_features: wgpu::Features::POLYGON_MODE_LINE,
             required_limits: wgpu::Limits::default(),
         }, None).await.expect("Failed to request device");
 
@@ -112,29 +115,12 @@ impl<'w> VoxelGame<'w> {
                     .expect("No cursor confine/lock available.")
             );
 
-        let meshes = vec![
-            // Test mesh
-            Model::new(
-                &bind_layouts["model"],
-                &device,
-                Mesh::create(
-                    &device,
-                    &[
-                        Vertex { position: [0.0, 0.0, 0.0], uv: [0.0, 0.0] },
-                        Vertex { position: [1.0, 0.0, 0.0], uv: [1.0, 0.0] },
-                        Vertex { position: [1.0, 1.0, 0.0], uv: [1.0, 1.0] },
-                        Vertex { position: [0.0, 1.0, 0.0], uv: [0.0, 1.0] },
-                    ],
-                    &[0, 1, 2, 0, 2, 3],
-                ),
-            )
-        ];
-
+        let debug = DebugDrawer::new();
         let mut world = World::new(NoiseGenerator::new(69420));
         
-        for x in -2..=2 {
-            for z in -2..=2 {
-                for y in -2..=2 {
+        for x in -5..=5 {
+            for z in -5..=5 {
+                for y in -5..=5 {
                     world.generate_chunk(ChunkCoord { x, y, z });
                 }
             }
@@ -150,9 +136,9 @@ impl<'w> VoxelGame<'w> {
             device,
             queue,
 
-            meshes,
             depth_texture, // TODO: Move depth texture to textures hashmap
             world,
+            debug,
 
             start_time: Instant::now(),
             prev_time: 0.0,
@@ -306,6 +292,7 @@ impl<'w> VoxelGame<'w> {
         let mut map = HashMap::new();
 
         let opaque_module = device.create_shader_module(wgpu::include_wgsl!("shaders/opaque.wgsl"));
+        let debug_module = device.create_shader_module(wgpu::include_wgsl!("shaders/debug.wgsl"));
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
@@ -325,7 +312,7 @@ impl<'w> VoxelGame<'w> {
                 entry_point: Some("vs_main"),
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
                 buffers: &[
-                    Vertex::desc(),
+                    Vertex3d::desc(),
                 ],
             },
             fragment: Some(wgpu::FragmentState {
@@ -365,7 +352,56 @@ impl<'w> VoxelGame<'w> {
             cache: None,
         });
 
+        let debug_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("debug_pipeline"),
+            layout: Some(&pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &debug_module,
+                entry_point: Some("vs_main"),
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                buffers: &[
+                    DebugVertex::desc(),
+                ]
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &debug_module,
+                entry_point: Some("fs_main"),
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                targets: &[
+                    Some(wgpu::ColorTargetState {
+                        format: surface_config.format,
+                        blend: None,
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })
+                ]
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::LineList,
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode: None,
+                unclipped_depth: false,
+                polygon_mode: wgpu::PolygonMode::Line,
+                conservative: false,
+            },
+            multisample: wgpu::MultisampleState {
+                count: 1,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: Texture2d::DEPTH_FORMAT,
+                depth_write_enabled: false,
+                depth_compare: wgpu::CompareFunction::Less,
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState::default(),
+            }),
+            multiview: None,
+            cache: None,
+        });
+
         map.insert(String::from("opaque"), opaque_pipeline);
+        map.insert(String::from("debug"), debug_pipeline);
 
         map
     }
@@ -378,27 +414,27 @@ impl<'w> VoxelGame<'w> {
                 self.camera.uniform(),
             ]),
         );
-
-        for mesh in self.meshes.iter() {
-            mesh.update_buffer(&self.queue);
-        }
     }
 
     fn update(&mut self, delta: f32) {
         self.camera_controller.update(&mut self.camera, delta);
 
-        for mesh in self.meshes.iter_mut() {
-            mesh.position += cgmath::Vector3::new(0.1, 0.1, 0.1) * delta;
-        }
-
         self.world.dequeue_meshgen(&self.device, &self.queue, &self.bind_layouts["model"]);
+        self.update_uniform_buffers();
+
+        self.debug.new_frame();
+        // self.world.append_debug(
+        //     &mut self.debug,
+        //     &self.bind_layouts["model"],
+        //     &self.device,
+        //     &self.queue,
+        // );
     }
 
     fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
         let time = (std::time::Instant::now() - self.start_time).as_secs_f32();
         let delta = time - self.prev_time;
         self.update(delta);
-        self.update_uniform_buffers();
         self.prev_time = time;
 
         let image = self.surface.get_current_texture()?;
@@ -407,7 +443,7 @@ impl<'w> VoxelGame<'w> {
         
         let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
         {
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            let mut opaque_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,
                 color_attachments: &[
                     Some(wgpu::RenderPassColorAttachment {
@@ -431,16 +467,45 @@ impl<'w> VoxelGame<'w> {
                 occlusion_query_set: None,
             });
 
-            render_pass.set_pipeline(&self.pipelines["opaque"]);
+            opaque_pass.set_pipeline(&self.pipelines["opaque"]);
 
-            render_pass.set_bind_group(1, &self.bind_groups["terrain_texture"], &[]);
-            render_pass.set_bind_group(2, &self.bind_groups["camera"], &[]);
+            opaque_pass.set_bind_group(1, &self.bind_groups["terrain_texture"], &[]);
+            opaque_pass.set_bind_group(2, &self.bind_groups["camera"], &[]);
 
-            for mesh in self.meshes.iter() {
-                mesh.draw(&mut render_pass);
-            }
+            self.world.draw(&mut opaque_pass);
+        }
 
-            self.world.draw(&mut render_pass);
+        {
+            let mut debug_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: None,
+                color_attachments: &[
+                    Some(wgpu::RenderPassColorAttachment {
+                        view: &view,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: wgpu::StoreOp::Store,
+                        }
+                    })
+                ],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &self.depth_texture.view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Discard,
+                    }),
+                    stencil_ops: None,
+                }),
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+
+            debug_pass.set_pipeline(&self.pipelines["debug"]);
+
+            debug_pass.set_bind_group(1, &self.bind_groups["terrain_texture"], &[]);
+            debug_pass.set_bind_group(2, &self.bind_groups["camera"], &[]);
+
+            self.debug.draw(&mut debug_pass);
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
