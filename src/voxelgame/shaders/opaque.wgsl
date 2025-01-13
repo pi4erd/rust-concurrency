@@ -1,11 +1,13 @@
 struct VertexInput {
     @location(0) position: vec3<f32>,
-    @location(1) uv: vec2<f32>,
+    @location(1) normal: vec3<f32>,
+    @location(2) uv: vec2<f32>,
 };
 
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
-    @location(0) texCoord: vec2<f32>,
+    @location(0) normal: vec3<f32>,
+    @location(1) texCoord: vec2<f32>,
 };
 
 struct Camera {
@@ -28,6 +30,7 @@ var<uniform> camera: Camera;
 fn vs_main(in: VertexInput) -> VertexOutput {
     var out: VertexOutput;
     out.clip_position = camera.projection * camera.view * model.model * vec4(in.position, 1.0);
+    out.normal = in.normal;
     out.texCoord = in.uv;
     return out;
 }
@@ -39,6 +42,8 @@ var t_sampler: sampler;
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
+    let sun = normalize(vec3(2.0, 3.0, 1.0));
     let texture_sample = textureSample(t_diffuse, t_sampler, in.texCoord);
-    return vec4(texture_sample.rgb, 1.0);
+
+    return vec4(texture_sample.rgb * clamp(dot(sun, in.normal), 0.2, 1.0), 1.0);
 }

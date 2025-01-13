@@ -44,6 +44,8 @@ pub struct VoxelGame<'w> {
     textures: HashMap<String, Texture2d>,
     camera: Camera,
     camera_controller: CameraController,
+
+    generate: bool,
 }
 
 impl<'w> VoxelGame<'w> {
@@ -118,11 +120,13 @@ impl<'w> VoxelGame<'w> {
         let debug = DebugDrawer::new();
         let mut world = World::new(NoiseGenerator::new(69420));
         
-        for x in -5..=5 {
-            for z in -5..=5 {
-                world.generate_chunk(ChunkCoord { x, y: 0, z });
-            }
-        }
+        // for x in -3..=3 {
+        //     for z in -3..=3 {
+        //         for y in -3..=3 {
+        //             world.enqueue_chunk_gen(ChunkCoord { x, y, z });
+        //         }
+        //     }
+        // }
 
         Self {
             window,
@@ -148,6 +152,8 @@ impl<'w> VoxelGame<'w> {
             textures,
             camera,
             camera_controller,
+
+            generate: true,
         }
     }
 
@@ -417,7 +423,12 @@ impl<'w> VoxelGame<'w> {
     fn update(&mut self, delta: f32) {
         self.camera_controller.update(&mut self.camera, delta);
 
+        if self.generate {
+            self.world.enqueue_chunks_around(&self.camera, 4);
+        }
+        self.world.dequeue_chunk_gen();
         self.world.dequeue_meshgen(&self.device, &self.queue, &self.bind_layouts["model"]);
+
         self.update_uniform_buffers();
 
         self.debug.new_frame();
@@ -575,6 +586,9 @@ impl<'w> Game for VoxelGame<'w> {
                                 Some(_) => None,
                                 None => Some(winit::window::Fullscreen::Borderless(None)),
                             });
+                        }
+                        PhysicalKey::Code(KeyCode::KeyG) => {
+                            self.generate = !self.generate;
                         }
                         _ => {}
                     }

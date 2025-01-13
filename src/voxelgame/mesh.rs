@@ -29,13 +29,15 @@ pub trait Instance: Pod + Zeroable {
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
 pub struct Vertex3d {
     pub position: [f32; 3],
+    pub normal: [f32; 3],
     pub uv: [f32; 2],
 }
 
 impl Vertex3d {
     const ATTRIBS: &'static [wgpu::VertexAttribute] = &wgpu::vertex_attr_array![
         0 => Float32x3,
-        1 => Float32x2,
+        1 => Float32x3,
+        2 => Float32x2
     ];
 }
 

@@ -2,6 +2,7 @@ use std::collections::{HashMap, VecDeque};
 
 use cgmath::{MetricSpace, Zero};
 use chunk::{Chunk, ChunkCoord, CHUNK_SIZE};
+use fastnoise_lite::FastNoiseLite;
 use meshgen::generate_model;
 use noise::{Fbm, NoiseFn};
 use voxel::{Blocks, Voxel};
@@ -17,22 +18,23 @@ pub trait Generator {
 }
 
 struct NoiseSampler {
-    noise: Fbm<noise::Simplex>,
+    // noise: Fbm<noise::Simplex>,
+    noise: FastNoiseLite,
 }
 
 impl NoiseSampler {
-    pub fn new(seed: u32) -> Self {
+    pub fn new(seed: i32) -> Self {
         Self {
-            noise: Fbm::new(seed),
+            noise: FastNoiseLite::with_seed(seed),
         }
     }
 
-    pub fn sample(&self, chunk_coord: ChunkCoord, x: f64, y: f64, z: f64, scale: f64) -> f64 {
-        self.noise.get([
-            ((chunk_coord.x as f64 * CHUNK_SIZE.0 as f64) + x) * scale,
-            ((chunk_coord.y as f64 * CHUNK_SIZE.1 as f64) + y) * scale,
-            ((chunk_coord.z as f64 * CHUNK_SIZE.2 as f64) + z) * scale,
-        ])
+    pub fn sample(&self, chunk_coord: ChunkCoord, x: f32, y: f32, z: f32, scale: f32) -> f32 {
+        self.noise.get_noise_3d(
+            ((chunk_coord.x as f32 * CHUNK_SIZE.0 as f32) + x) * scale,
+            ((chunk_coord.y as f32 * CHUNK_SIZE.1 as f32) + y) * scale,
+            ((chunk_coord.z as f32 * CHUNK_SIZE.2 as f32) + z) * scale,
+        )
     }
 }
 
@@ -41,7 +43,7 @@ pub struct NoiseGenerator {
 }
 
 impl NoiseGenerator {
-    pub fn new(seed: u32) -> Self {
+    pub fn new(seed: i32) -> Self {
         Self {
             sampler: NoiseSampler::new(seed),
         }
@@ -50,18 +52,32 @@ impl NoiseGenerator {
 
 impl Generator for NoiseGenerator {
     fn generate(&self, chunk: &mut Chunk) {
-        const SCALE: f64 = 0.05;
+        const SCALE: f32 = 2.0;
 
         for x in 0..CHUNK_SIZE.0 {
             for z in 0..CHUNK_SIZE.2 {
-                let sample = (self.sampler.sample(
-                    chunk.coord,
-                    x as f64, 0.0, z as f64,
-                    SCALE
-                ) / 2.0 + 0.5) * 30.0 + 10.0;
+                for y in 0..CHUNK_SIZE.1 {
+                    let sample = self.sampler.sample(
+                        chunk.coord,
+                        x as f32, y as f32, z as f32,
+                        SCALE
+                    ) * 0.5 + 0.5;
 
-                for y in 0..sample as usize {
-                    chunk.set_voxel(x, y, z, Blocks::STONE.default_state());
+                    let small_sample = self.sampler.sample(
+                        chunk.coord,
+                        x as f32, y as f32, z as f32,
+                        SCALE * 4.0
+                    ) * 0.5 + 0.5;
+
+                    if small_sample < 0.3 {
+                        continue;
+                    }
+
+                    if sample < 0.4 {
+                        chunk.set_voxel(x, y, z, Blocks::STONE.default_state());
+                    } else if sample < 0.5 {
+                        chunk.set_voxel(x, y, z, Blocks::GRASS_BLOCK.default_state());
+                    }
                 }
             }
         }
@@ -74,7 +90,9 @@ pub struct World<T> {
     generator: T,
     chunks: HashMap<ChunkCoord, Chunk>,
     models: HashMap<ChunkCoord, Model<Mesh>>,
-    chunks_to_generate: Queue<ChunkCoord>,
+    
+    chunk_gen_queue: Queue<ChunkCoord>,
+    meshgen_queue: Queue<ChunkCoord>,
 }
 
 impl<T> World<T> {
@@ -83,7 +101,8 @@ impl<T> World<T> {
             generator,
             chunks: HashMap::new(),
             models: HashMap::new(),
-            chunks_to_generate: Queue::new(),
+            chunk_gen_queue: Queue::new(),
+            meshgen_queue: Queue::new(),
         }
     }
 
@@ -109,16 +128,48 @@ impl<T> World<T> {
         )
     }
 
+    pub fn enqueue_chunks_around(&mut self, camera: &Camera, distance: usize) {
+        let distance = distance as i32;
+        let center = ChunkCoord::from_world(cgmath::Vector3::new(
+            camera.eye.x,
+            camera.eye.y,
+            camera.eye.z,
+        ));
+        
+        for i in -distance..=distance {
+            for j in -distance..=distance {
+                for k in -distance..=distance {
+                    let chunk = center + ChunkCoord {
+                        x: i,
+                        y: j,
+                        z: k,
+                    };
+                    self.enqueue_chunk_gen(chunk);
+                }
+            }
+        }
+    }
+
     // To be run on a separate thread
     pub fn generate_chunk(&mut self, coord: ChunkCoord) where T: Generator {
-        if self.chunks.contains_key(&coord) {
-            return;
-        }
-
         self.chunks.insert(coord, Chunk::new(coord));
         self.generator.generate(self.chunks.get_mut(&coord).unwrap());
 
-        self.chunks_to_generate.push_back(coord);
+        self.meshgen_queue.push_back(coord);
+    }
+
+    pub fn dequeue_chunk_gen(&mut self) where T: Generator {
+        if let Some(chunk) = self.chunk_gen_queue.pop_front() {
+            self.generate_chunk(chunk);
+        }
+    }
+
+    pub fn enqueue_chunk_gen(&mut self, coord: ChunkCoord) {
+        if self.chunks.contains_key(&coord) || self.chunk_gen_queue.contains(&coord) {
+            return;
+        }
+
+        self.chunk_gen_queue.push_back(coord);
     }
 
     pub fn dequeue_meshgen(
@@ -127,8 +178,19 @@ impl<T> World<T> {
         queue: &wgpu::Queue,
         bg_layout: &wgpu::BindGroupLayout,
     ) {
-        if let Some(coord) = self.chunks_to_generate.pop_front() {
+        if let Some(coord) = self.meshgen_queue.pop_front() {
             // TODO: Check if all neighbors present, otherwise not draw
+            if !(self.chunks.contains_key(&coord.left()) &&
+                self.chunks.contains_key(&coord.right()) &&
+                self.chunks.contains_key(&coord.front()) &&
+                self.chunks.contains_key(&coord.back()) &&
+                self.chunks.contains_key(&coord.up()) &&
+                self.chunks.contains_key(&coord.down()))
+            {
+                self.meshgen_queue.push_back(coord);
+                return; // put back and try next time
+            }
+
             let model = generate_model(
                 device,
                 bg_layout,
@@ -154,34 +216,34 @@ impl<T> World<T> {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) {
-        for (coord, _) in self.models.iter() {
-            let position: cgmath::Vector3<f32> = coord.to_world();
-            let point: cgmath::Point3<f32> = cgmath::Point3::new(
-                position.x,
-                position.y,
-                position.z
-            );
+        let chunk_coord = ChunkCoord::from_world(cgmath::Vector3::new(
+            observer.eye.x,
+            observer.eye.y,
+            observer.eye.z,
+        ));
 
-            if point.distance(observer.eye) > 80.0 {
-                continue;
-            }
-            let scale = cgmath::Vector3::new(
-                CHUNK_SIZE.0 as f32,
-                CHUNK_SIZE.1 as f32,
-                CHUNK_SIZE.2 as f32,
-            );
-
-            debug.append_model(
-                ModelName::Cube,
-                device,
-                queue,
-                model_bg_layout,
-                position,
-                cgmath::Quaternion::zero(),
-                scale,
-                [1.0, 0.0, 1.0]
-            );
+        if !self.chunks.contains_key(&chunk_coord) {
+            return;
         }
+
+        let position = chunk_coord.to_world();
+
+        let scale = cgmath::Vector3::new(
+            CHUNK_SIZE.0 as f32,
+            CHUNK_SIZE.1 as f32,
+            CHUNK_SIZE.2 as f32,
+        );
+
+        debug.append_model(
+            ModelName::Cube,
+            device,
+            queue,
+            model_bg_layout,
+            position,
+            cgmath::Quaternion::zero(),
+            scale,
+            [1.0, 0.0, 1.0]
+        );
     }
 }
 

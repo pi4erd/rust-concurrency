@@ -26,6 +26,7 @@ fn face(texture_id: usize, offset: (usize, usize, usize), orientation: FaceOrien
                     offset.1 as f32,
                     offset.2 as f32 + 1.0,
                 ],
+                normal: [0.0, 0.0, 1.0],
                 uv: [
                     texture_offset.0 + TEXTURE_UV_STEP.0,
                     texture_offset.1
@@ -37,6 +38,7 @@ fn face(texture_id: usize, offset: (usize, usize, usize), orientation: FaceOrien
                     offset.1 as f32,
                     offset.2 as f32 + 1.0,
                 ],
+                normal: [0.0, 0.0, 1.0],
                 uv: [
                     texture_offset.0,
                     texture_offset.1
@@ -48,6 +50,7 @@ fn face(texture_id: usize, offset: (usize, usize, usize), orientation: FaceOrien
                     offset.1 as f32 + 1.0,
                     offset.2 as f32 + 1.0,
                 ],
+                normal: [0.0, 0.0, 1.0],
                 uv: [
                     texture_offset.0,
                     texture_offset.1 + TEXTURE_UV_STEP.1,
@@ -59,6 +62,7 @@ fn face(texture_id: usize, offset: (usize, usize, usize), orientation: FaceOrien
                     offset.1 as f32 + 1.0,
                     offset.2 as f32 + 1.0,
                 ],
+                normal: [0.0, 0.0, 1.0],
                 uv: [
                     texture_offset.0 + TEXTURE_UV_STEP.0,
                     texture_offset.1 + TEXTURE_UV_STEP.1,
@@ -72,6 +76,7 @@ fn face(texture_id: usize, offset: (usize, usize, usize), orientation: FaceOrien
                     offset.1 as f32,
                     offset.2 as f32,
                 ],
+                normal: [0.0, 0.0, -1.0],
                 uv: [
                     texture_offset.0,
                     texture_offset.1,
@@ -83,6 +88,7 @@ fn face(texture_id: usize, offset: (usize, usize, usize), orientation: FaceOrien
                     offset.1 as f32,
                     offset.2 as f32,
                 ],
+                normal: [0.0, 0.0, -1.0],
                 uv: [
                     texture_offset.0 + TEXTURE_UV_STEP.0,
                     texture_offset.1,
@@ -94,6 +100,7 @@ fn face(texture_id: usize, offset: (usize, usize, usize), orientation: FaceOrien
                     offset.1 as f32 + 1.0,
                     offset.2 as f32,
                 ],
+                normal: [0.0, 0.0, -1.0],
                 uv: [
                     texture_offset.0 + TEXTURE_UV_STEP.0,
                     texture_offset.1 + TEXTURE_UV_STEP.1,
@@ -105,6 +112,7 @@ fn face(texture_id: usize, offset: (usize, usize, usize), orientation: FaceOrien
                     offset.1 as f32 + 1.0,
                     offset.2 as f32,
                 ],
+                normal: [0.0, 0.0, -1.0],
                 uv: [
                     texture_offset.0,
                     texture_offset.1 + TEXTURE_UV_STEP.1,
@@ -118,6 +126,7 @@ fn face(texture_id: usize, offset: (usize, usize, usize), orientation: FaceOrien
                     offset.1 as f32,
                     offset.2 as f32 + 1.0,
                 ],
+                normal: [-1.0, 0.0, 0.0],
                 uv: [
                     texture_offset.0,
                     texture_offset.1,
@@ -129,6 +138,7 @@ fn face(texture_id: usize, offset: (usize, usize, usize), orientation: FaceOrien
                     offset.1 as f32,
                     offset.2 as f32,
                 ],
+                normal: [-1.0, 0.0, 0.0],
                 uv: [
                     texture_offset.0 + TEXTURE_UV_STEP.0,
                     texture_offset.1,
@@ -140,6 +150,7 @@ fn face(texture_id: usize, offset: (usize, usize, usize), orientation: FaceOrien
                     offset.1 as f32 + 1.0,
                     offset.2 as f32,
                 ],
+                normal: [-1.0, 0.0, 0.0],
                 uv: [
                     texture_offset.0 + TEXTURE_UV_STEP.0,
                     texture_offset.1 + TEXTURE_UV_STEP.1,
@@ -151,6 +162,7 @@ fn face(texture_id: usize, offset: (usize, usize, usize), orientation: FaceOrien
                     offset.1 as f32 + 1.0,
                     offset.2 as f32 + 1.0,
                 ],
+                normal: [-1.0, 0.0, 0.0],
                 uv: [
                     texture_offset.0,
                     texture_offset.1 + TEXTURE_UV_STEP.1,
@@ -164,6 +176,7 @@ fn face(texture_id: usize, offset: (usize, usize, usize), orientation: FaceOrien
                     offset.1 as f32,
                     offset.2 as f32,
                 ],
+                normal: [1.0, 0.0, 0.0],
                 uv: [
                     texture_offset.0,
                     texture_offset.1,
@@ -175,6 +188,7 @@ fn face(texture_id: usize, offset: (usize, usize, usize), orientation: FaceOrien
                     offset.1 as f32,
                     offset.2 as f32 + 1.0,
                 ],
+                normal: [1.0, 0.0, 0.0],
                 uv: [
                     texture_offset.0 + TEXTURE_UV_STEP.0,
                     texture_offset.1,
@@ -186,6 +200,7 @@ fn face(texture_id: usize, offset: (usize, usize, usize), orientation: FaceOrien
                     offset.1 as f32 + 1.0,
                     offset.2 as f32 + 1.0,
                 ],
+                normal: [1.0, 0.0, 0.0],
                 uv: [
                     texture_offset.0 + TEXTURE_UV_STEP.0,
                     texture_offset.1 + TEXTURE_UV_STEP.1,
@@ -197,6 +212,7 @@ fn face(texture_id: usize, offset: (usize, usize, usize), orientation: FaceOrien
                     offset.1 as f32 + 1.0,
                     offset.2 as f32,
                 ],
+                normal: [1.0, 0.0, 0.0],
                 uv: [
                     texture_offset.0,
                     texture_offset.1 + TEXTURE_UV_STEP.1,
@@ -210,6 +226,7 @@ fn face(texture_id: usize, offset: (usize, usize, usize), orientation: FaceOrien
                     offset.1 as f32,
                     offset.2 as f32,
                 ],
+                normal: [0.0, -1.0, 0.0],
                 uv: [
                     texture_offset.0,
                     texture_offset.1,
@@ -221,6 +238,7 @@ fn face(texture_id: usize, offset: (usize, usize, usize), orientation: FaceOrien
                     offset.1 as f32,
                     offset.2 as f32,
                 ],
+                normal: [0.0, -1.0, 0.0],
                 uv: [
                     texture_offset.0 + TEXTURE_UV_STEP.0,
                     texture_offset.1,
@@ -232,6 +250,7 @@ fn face(texture_id: usize, offset: (usize, usize, usize), orientation: FaceOrien
                     offset.1 as f32,
                     offset.2 as f32 + 1.0,
                 ],
+                normal: [0.0, -1.0, 0.0],
                 uv: [
                     texture_offset.0 + TEXTURE_UV_STEP.0,
                     texture_offset.1 + TEXTURE_UV_STEP.1,
@@ -243,6 +262,7 @@ fn face(texture_id: usize, offset: (usize, usize, usize), orientation: FaceOrien
                     offset.1 as f32,
                     offset.2 as f32 + 1.0,
                 ],
+                normal: [0.0, -1.0, 0.0],
                 uv: [
                     texture_offset.0,
                     texture_offset.1 + TEXTURE_UV_STEP.1,
@@ -256,6 +276,7 @@ fn face(texture_id: usize, offset: (usize, usize, usize), orientation: FaceOrien
                     offset.1 as f32 + 1.0,
                     offset.2 as f32,
                 ],
+                normal: [0.0, 1.0, 0.0],
                 uv: [
                     texture_offset.0,
                     texture_offset.1,
@@ -267,6 +288,7 @@ fn face(texture_id: usize, offset: (usize, usize, usize), orientation: FaceOrien
                     offset.1 as f32 + 1.0,
                     offset.2 as f32,
                 ],
+                normal: [0.0, 1.0, 0.0],
                 uv: [
                     texture_offset.0 + TEXTURE_UV_STEP.0,
                     texture_offset.1,
@@ -278,6 +300,7 @@ fn face(texture_id: usize, offset: (usize, usize, usize), orientation: FaceOrien
                     offset.1 as f32 + 1.0,
                     offset.2 as f32 + 1.0,
                 ],
+                normal: [0.0, 1.0, 0.0],
                 uv: [
                     texture_offset.0 + TEXTURE_UV_STEP.0,
                     texture_offset.1 + TEXTURE_UV_STEP.1,
@@ -289,6 +312,7 @@ fn face(texture_id: usize, offset: (usize, usize, usize), orientation: FaceOrien
                     offset.1 as f32 + 1.0,
                     offset.2 as f32 + 1.0,
                 ],
+                normal: [0.0, 1.0, 0.0],
                 uv: [
                     texture_offset.0,
                     texture_offset.1 + TEXTURE_UV_STEP.1,
@@ -336,6 +360,14 @@ pub fn generate_model<T>(
                         idx.into_iter().for_each(|i| indices.push(i + vertices.len() as u32));
                         vx.into_iter().for_each(|v| vertices.push(v));
                     }
+                } else {
+                    let (vx, idx) = face(
+                        current_block_info.texture_id,
+                        (x as usize, y as usize, z as usize),
+                        FaceOrientation::Left
+                    );
+                    idx.into_iter().for_each(|i| indices.push(i + vertices.len() as u32));
+                    vx.into_iter().for_each(|v| vertices.push(v));
                 }
 
                 // Right
@@ -354,6 +386,14 @@ pub fn generate_model<T>(
                         idx.into_iter().for_each(|i| indices.push(i + vertices.len() as u32));
                         vx.into_iter().for_each(|v| vertices.push(v));
                     }
+                } else {
+                    let (vx, idx) = face(
+                        current_block_info.texture_id,
+                        (x as usize, y as usize, z as usize),
+                        FaceOrientation::Right
+                    );
+                    idx.into_iter().for_each(|i| indices.push(i + vertices.len() as u32));
+                    vx.into_iter().for_each(|v| vertices.push(v));
                 }
 
                 // Top
@@ -372,6 +412,14 @@ pub fn generate_model<T>(
                         idx.into_iter().for_each(|i| indices.push(i + vertices.len() as u32));
                         vx.into_iter().for_each(|v| vertices.push(v));
                     }
+                } else {
+                    let (vx, idx) = face(
+                        current_block_info.texture_id,
+                        (x as usize, y as usize, z as usize),
+                        FaceOrientation::Top
+                    );
+                    idx.into_iter().for_each(|i| indices.push(i + vertices.len() as u32));
+                    vx.into_iter().for_each(|v| vertices.push(v));
                 }
                 
                 // Bottom
@@ -390,6 +438,14 @@ pub fn generate_model<T>(
                         idx.into_iter().for_each(|i| indices.push(i + vertices.len() as u32));
                         vx.into_iter().for_each(|v| vertices.push(v));
                     }
+                } else {
+                    let (vx, idx) = face(
+                        current_block_info.texture_id,
+                        (x as usize, y as usize, z as usize),
+                        FaceOrientation::Bottom
+                    );
+                    idx.into_iter().for_each(|i| indices.push(i + vertices.len() as u32));
+                    vx.into_iter().for_each(|v| vertices.push(v));
                 }
 
                 // Front
@@ -408,6 +464,14 @@ pub fn generate_model<T>(
                         idx.into_iter().for_each(|i| indices.push(i + vertices.len() as u32));
                         vx.into_iter().for_each(|v| vertices.push(v));
                     }
+                } else {
+                    let (vx, idx) = face(
+                        current_block_info.texture_id,
+                        (x as usize, y as usize, z as usize),
+                        FaceOrientation::Front
+                    );
+                    idx.into_iter().for_each(|i| indices.push(i + vertices.len() as u32));
+                    vx.into_iter().for_each(|v| vertices.push(v));
                 }
 
                 // Back
@@ -426,6 +490,14 @@ pub fn generate_model<T>(
                         idx.into_iter().for_each(|i| indices.push(i + vertices.len() as u32));
                         vx.into_iter().for_each(|v| vertices.push(v));
                     }
+                } else {
+                    let (vx, idx) = face(
+                        current_block_info.texture_id,
+                        (x as usize, y as usize, z as usize),
+                        FaceOrientation::Back
+                    );
+                    idx.into_iter().for_each(|i| indices.push(i + vertices.len() as u32));
+                    vx.into_iter().for_each(|v| vertices.push(v));
                 }
             }
         }

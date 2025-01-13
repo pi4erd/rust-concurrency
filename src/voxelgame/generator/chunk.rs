@@ -1,12 +1,39 @@
-use std::fmt::Display;
+use std::{fmt::Display, ops::{Add, Neg}};
 
 use super::voxel::{Blocks, Voxel};
+
+pub const CHUNK_SIZE: (usize, usize, usize) = (20, 20, 20);
+const CHUNK_SIZE_ITEMS: usize = CHUNK_SIZE.0 * CHUNK_SIZE.1 * CHUNK_SIZE.2;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Hash)]
 pub struct ChunkCoord {
     pub x: i32,
     pub y: i32,
     pub z: i32,
+}
+
+impl Neg for ChunkCoord {
+    type Output = Self;
+
+    fn neg(self) -> Self::Output {
+        Self {
+            x: -self.x,
+            y: -self.y,
+            z: -self.z,
+        }
+    }
+}
+
+impl Add for ChunkCoord {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Self {
+            x: self.x + rhs.x,
+            y: self.y + rhs.y,
+            z: self.z + rhs.z,
+        }
+    }
 }
 
 impl ChunkCoord {
@@ -17,6 +44,67 @@ impl ChunkCoord {
             self.z as f32 * CHUNK_SIZE.2 as f32,
         )
     }
+
+    pub fn from_world(coord: cgmath::Vector3<f32>) -> Self {
+        // FIXME: It's off by 1 sometimes and I can't be bothered to fix it now
+        let x = coord.x as i32;
+        let y = coord.y as i32;
+        let z = coord.z as i32;
+
+        Self {
+            x: x / CHUNK_SIZE.0 as i32 - if x < 0 { 1 } else { 0 },
+            y: y / CHUNK_SIZE.1 as i32 - if y < 0 { 1 } else { 0 },
+            z: z / CHUNK_SIZE.2 as i32 - if z < 0 { 1 } else { 0 },
+        }
+    }
+
+    pub fn left(self) -> Self {
+        Self {
+            x: self.x - 1,
+            y: self.y,
+            z: self.z,
+        }
+    }
+
+    pub fn right(self) -> Self {
+        Self {
+            x: self.x + 1,
+            y: self.y,
+            z: self.z,
+        }
+    }
+
+    pub fn front(self) -> Self {
+        Self {
+            x: self.x,
+            y: self.y,
+            z: self.z - 1,
+        }
+    }
+
+    pub fn back(self) -> Self {
+        Self {
+            x: self.x,
+            y: self.y,
+            z: self.z + 1,
+        }
+    }
+
+    pub fn up(self) -> Self {
+        Self {
+            x: self.x,
+            y: self.y + 1,
+            z: self.z,
+        }
+    }
+
+    pub fn down(self) -> Self {
+        Self {
+            x: self.x,
+            y: self.y - 1,
+            z: self.z,
+        }
+    }
 }
 
 impl Display for ChunkCoord {
@@ -24,9 +112,6 @@ impl Display for ChunkCoord {
         write!(f, "({}, {}, {})", self.x, self.y, self.z)
     }
 }
-
-pub const CHUNK_SIZE: (usize, usize, usize) = (16, 64, 16);
-const CHUNK_SIZE_ITEMS: usize = CHUNK_SIZE.0 * CHUNK_SIZE.1 * CHUNK_SIZE.2;
 
 #[derive(Clone, Debug)]
 pub struct Chunk {
