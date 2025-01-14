@@ -1,19 +1,28 @@
-use std::collections::{HashMap, VecDeque};
-
-use cgmath::{MetricSpace, Zero};
-use chunk::{Chunk, ChunkCoord, CHUNK_SIZE};
-use fastnoise_lite::FastNoiseLite;
-use meshgen::generate_model;
-use noise::{Fbm, NoiseFn};
-use voxel::{Blocks, Voxel};
-
-use super::{camera::Camera, debug::{DebugDrawer, ModelName}, draw::{Drawable, Model}, mesh::Mesh};
-
 pub mod chunk;
 pub mod voxel;
 pub mod meshgen;
 
-pub trait Generator {
+use std::{
+    collections::{HashMap, VecDeque},
+    sync::{mpsc::{self, Receiver, Sender}, Arc, Mutex},
+    thread::{self, JoinHandle}
+};
+
+use cgmath::Zero;
+use fastnoise_lite::FastNoiseLite;
+
+use chunk::{Chunk, ChunkCoord, CHUNK_SIZE};
+use meshgen::generate_model;
+use voxel::{Blocks, Voxel};
+
+use super::{
+    camera::Camera,
+    debug::{DebugDrawer, ModelName},
+    draw::{Drawable, Model},
+    mesh::Mesh
+};
+
+pub trait Generator: Sync + Send {
     fn generate(&self, _chunk: &mut Chunk) {}
 }
 
@@ -56,27 +65,27 @@ impl Generator for NoiseGenerator {
 
         for x in 0..CHUNK_SIZE.0 {
             for z in 0..CHUNK_SIZE.2 {
+                let sample = self.sampler.sample(
+                    chunk.coord,
+                    x as f32, 0.0, z as f32,
+                    SCALE
+                ) * 0.5 + 0.5;
+
                 for y in 0..CHUNK_SIZE.1 {
-                    let sample = self.sampler.sample(
-                        chunk.coord,
-                        x as f32, y as f32, z as f32,
-                        SCALE
-                    ) * 0.5 + 0.5;
-
-                    let small_sample = self.sampler.sample(
-                        chunk.coord,
-                        x as f32, y as f32, z as f32,
-                        SCALE * 4.0
-                    ) * 0.5 + 0.5;
-
-                    if small_sample < 0.3 {
-                        continue;
+                    let wy = chunk.coord.y as i32 * CHUNK_SIZE.1 as i32 + y as i32;
+                    if wy < sample as i32 {
+                        chunk.set_voxel(x, y, z, Blocks::STONE.default_state());
                     }
 
-                    if sample < 0.4 {
+                    let flying_islands = self.sampler.sample(
+                        chunk.coord,
+                        x as f32, y as f32, z as f32,
+                        SCALE * 0.8
+                    );
+                    let flying_islands = flying_islands * (wy as f32 / CHUNK_SIZE.1 as f32);
+
+                    if flying_islands > 2.0 {
                         chunk.set_voxel(x, y, z, Blocks::STONE.default_state());
-                    } else if sample < 0.5 {
-                        chunk.set_voxel(x, y, z, Blocks::GRASS_BLOCK.default_state());
                     }
                 }
             }
@@ -87,22 +96,31 @@ impl Generator for NoiseGenerator {
 type Queue<T> = VecDeque<T>;
 
 pub struct World<T> {
-    generator: T,
+    generator: Arc<T>,
     chunks: HashMap<ChunkCoord, Chunk>,
     models: HashMap<ChunkCoord, Model<Mesh>>,
     
-    chunk_gen_queue: Queue<ChunkCoord>,
+    chunk_gen_queue: Arc<Mutex<Queue<ChunkCoord>>>,
     meshgen_queue: Queue<ChunkCoord>,
+    world_gen_threads: Vec<JoinHandle<()>>,
+
+    receiver: Receiver<Chunk>,
+    sender: Sender<Chunk>,
 }
 
 impl<T> World<T> {
     pub fn new(generator: T) -> Self {
+        let (tx, rx) = mpsc::channel::<Chunk>();
         Self {
-            generator,
+            generator: Arc::new(generator),
             chunks: HashMap::new(),
             models: HashMap::new(),
-            chunk_gen_queue: Queue::new(),
+            chunk_gen_queue: Arc::new(Mutex::new(Queue::new())),
             meshgen_queue: Queue::new(),
+            world_gen_threads: Vec::new(),
+
+            receiver: rx,
+            sender: tx,
         }
     }
 
@@ -150,26 +168,46 @@ impl<T> World<T> {
         }
     }
 
-    // To be run on a separate thread
-    pub fn generate_chunk(&mut self, coord: ChunkCoord) where T: Generator {
-        self.chunks.insert(coord, Chunk::new(coord));
-        self.generator.generate(self.chunks.get_mut(&coord).unwrap());
-
-        self.meshgen_queue.push_back(coord);
-    }
-
-    pub fn dequeue_chunk_gen(&mut self) where T: Generator {
-        if let Some(chunk) = self.chunk_gen_queue.pop_front() {
-            self.generate_chunk(chunk);
+    pub fn dispatch_threads(&mut self, n: usize) where T: 'static + Generator {
+        for _ in 0..n {
+            let tx = self.sender.clone();
+            let chunk_gen_queue = self.chunk_gen_queue.clone();
+            let generator = self.generator.clone();
+            self.world_gen_threads.push(thread::spawn(move || {
+                loop {
+                    let chunk_to_generate: Option<ChunkCoord>;
+                    {
+                        chunk_to_generate = chunk_gen_queue.lock().unwrap().pop_front()
+                    }
+    
+                    if let Some(chunk_to_generate) = chunk_to_generate {
+                        let mut chunk = Chunk::new(chunk_to_generate);
+                        generator.generate(&mut chunk);
+    
+                        tx.send(chunk).unwrap();
+                    } else {
+                        std::thread::sleep(std::time::Duration::from_millis(100));
+                    }
+                }
+            }));
         }
     }
 
     pub fn enqueue_chunk_gen(&mut self, coord: ChunkCoord) {
-        if self.chunks.contains_key(&coord) || self.chunk_gen_queue.contains(&coord) {
+        if self.chunks.contains_key(&coord) || self.chunk_gen_queue.lock().unwrap().contains(&coord) {
             return;
         }
 
-        self.chunk_gen_queue.push_back(coord);
+        self.chunk_gen_queue.lock().unwrap().push_back(coord);
+    }
+
+    pub fn receive_chunk(&mut self, millis: u64) {
+        let recv = self.receiver.recv_timeout(std::time::Duration::from_millis(millis));
+        if let Ok(chunk) = recv {
+            let coord = chunk.coord;
+            self.chunks.insert(coord, chunk);
+            self.meshgen_queue.push_back(coord);
+        }
     }
 
     pub fn dequeue_meshgen(

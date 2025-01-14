@@ -10,7 +10,7 @@ use std::{collections::HashMap, sync::Arc, time::Instant};
 use camera::{Camera, CameraController};
 use debug::{DebugDrawer, DebugVertex};
 use draw::Drawable;
-use generator::{chunk::ChunkCoord, NoiseGenerator, World};
+use generator::{NoiseGenerator, World};
 use mesh::{Vertex, Vertex3d};
 use pollster::FutureExt;
 use texture::Texture2d;
@@ -119,6 +119,8 @@ impl<'w> VoxelGame<'w> {
 
         let debug = DebugDrawer::new();
         let mut world = World::new(NoiseGenerator::new(69420));
+
+        world.dispatch_threads(3);
         
         // for x in -3..=3 {
         //     for z in -3..=3 {
@@ -420,13 +422,18 @@ impl<'w> VoxelGame<'w> {
         );
     }
 
+    pub fn destroy(&mut self) {
+        
+    }
+
     fn update(&mut self, delta: f32) {
         self.camera_controller.update(&mut self.camera, delta);
 
         if self.generate {
-            self.world.enqueue_chunks_around(&self.camera, 4);
+            self.world.enqueue_chunks_around(&self.camera, 6);
         }
-        self.world.dequeue_chunk_gen();
+
+        self.world.receive_chunk(1);
         self.world.dequeue_meshgen(&self.device, &self.queue, &self.bind_layouts["model"]);
 
         self.update_uniform_buffers();
@@ -608,5 +615,9 @@ impl<'w> Game for VoxelGame<'w> {
     }
     
     fn about_to_wait(&mut self, _event_loop: &winit::event_loop::ActiveEventLoop) {
+    }
+
+    fn exiting(&mut self, _event_loop: &winit::event_loop::ActiveEventLoop) {
+        self.destroy();
     }
 }

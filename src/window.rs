@@ -24,6 +24,8 @@ pub trait Game {
     }
 
     fn about_to_wait(&mut self, _event_loop: &winit::event_loop::ActiveEventLoop) {}
+
+    fn exiting(&mut self, _event_loop: &winit::event_loop::ActiveEventLoop) {}
 }
 
 pub struct GameWindow<T: Game> {
@@ -85,5 +87,12 @@ impl<T: Game> ApplicationHandler for GameWindow<T> {
             .as_mut()
             .unwrap()
             .window_event(event_loop, window_id, event);
+    }
+
+    fn exiting(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
+        self.game
+            .as_mut()
+            .unwrap()
+            .exiting(event_loop);
     }
 }

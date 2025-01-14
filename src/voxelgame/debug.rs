@@ -100,13 +100,6 @@ impl DebugDrawer {
         self.model_pool.push(model);
     }
 
-    fn sphere_mesh(
-        _device: &wgpu::Device,
-        _color: [f32; 3]
-    ) -> Mesh {
-        todo!()
-    }
-
     fn cube_mesh(
         device: &wgpu::Device,
         color: [f32; 3],
