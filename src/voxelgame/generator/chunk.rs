@@ -2,8 +2,8 @@ use std::{fmt::Display, ops::{Add, Neg}};
 
 use super::voxel::{Blocks, Voxel};
 
-pub const CHUNK_SIZE: (usize, usize, usize) = (32, 32, 32); // TODO: Make chunks cubic
-const CHUNK_SIZE_ITEMS: usize = CHUNK_SIZE.0 * CHUNK_SIZE.1 * CHUNK_SIZE.2;
+pub const CHUNK_SIZE: usize = 32;
+const CHUNK_SIZE_ITEMS: usize = CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Hash)]
 pub struct ChunkCoord {
@@ -39,9 +39,9 @@ impl Add for ChunkCoord {
 impl ChunkCoord {
     pub fn to_world(&self) -> cgmath::Vector3<f32> {
         cgmath::Vector3::new(
-            self.x as f32 * CHUNK_SIZE.0 as f32,
-            self.y as f32 * CHUNK_SIZE.1 as f32,
-            self.z as f32 * CHUNK_SIZE.2 as f32,
+            self.x as f32 * CHUNK_SIZE as f32,
+            self.y as f32 * CHUNK_SIZE as f32,
+            self.z as f32 * CHUNK_SIZE as f32,
         )
     }
 
@@ -52,9 +52,9 @@ impl ChunkCoord {
         let z = coord.z as i32;
 
         Self {
-            x: x / CHUNK_SIZE.0 as i32 - if x < 0 { 1 } else { 0 },
-            y: y / CHUNK_SIZE.1 as i32 - if y < 0 { 1 } else { 0 },
-            z: z / CHUNK_SIZE.2 as i32 - if z < 0 { 1 } else { 0 },
+            x: x / CHUNK_SIZE as i32 - if x < 0 { 1 } else { 0 },
+            y: y / CHUNK_SIZE as i32 - if y < 0 { 1 } else { 0 },
+            z: z / CHUNK_SIZE as i32 - if z < 0 { 1 } else { 0 },
         }
     }
 
@@ -128,19 +128,19 @@ impl Chunk {
     }
 
     pub fn get_voxel(&self, x: usize, y: usize, z: usize) -> Option<Voxel> {
-        if x >= CHUNK_SIZE.0 || y >= CHUNK_SIZE.1 || z >= CHUNK_SIZE.2 {
+        if x >= CHUNK_SIZE || y >= CHUNK_SIZE || z >= CHUNK_SIZE {
             return None
         }
 
-        self.chunk_data.get(x + y * CHUNK_SIZE.0 + (z * CHUNK_SIZE.0 * CHUNK_SIZE.1)).cloned()
+        self.chunk_data.get(x + y * CHUNK_SIZE + (z * CHUNK_SIZE * CHUNK_SIZE)).cloned()
     }
 
     #[inline]
     pub fn set_voxel(&mut self, x: usize, y: usize, z: usize, voxel: Voxel) {
-        if x >= CHUNK_SIZE.0 || y >= CHUNK_SIZE.1 || z >= CHUNK_SIZE.2 {
+        if x >= CHUNK_SIZE || y >= CHUNK_SIZE || z >= CHUNK_SIZE {
             return;
         }
 
-        self.chunk_data[x + y * CHUNK_SIZE.0 + (z * CHUNK_SIZE.0 * CHUNK_SIZE.1)] = voxel;
+        self.chunk_data[x + y * CHUNK_SIZE + (z * CHUNK_SIZE * CHUNK_SIZE)] = voxel;
     }
 }

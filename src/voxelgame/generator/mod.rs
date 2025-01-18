@@ -40,9 +40,9 @@ impl NoiseSampler {
 
     pub fn sample(&self, chunk_coord: ChunkCoord, x: f32, y: f32, z: f32, scale: f32) -> f32 {
         self.noise.get_noise_3d(
-            ((chunk_coord.x as f32 * CHUNK_SIZE.0 as f32) + x) * scale,
-            ((chunk_coord.y as f32 * CHUNK_SIZE.1 as f32) + y) * scale,
-            ((chunk_coord.z as f32 * CHUNK_SIZE.2 as f32) + z) * scale,
+            ((chunk_coord.x as f32 * CHUNK_SIZE as f32) + x) * scale,
+            ((chunk_coord.y as f32 * CHUNK_SIZE as f32) + y) * scale,
+            ((chunk_coord.z as f32 * CHUNK_SIZE as f32) + z) * scale,
         )
     }
 }
@@ -63,17 +63,17 @@ impl Generator for NoiseGenerator {
     fn generate(&self, chunk: &mut Chunk) {
         const SCALE: f32 = 0.3;
 
-        for x in 0..CHUNK_SIZE.0 {
-            for z in 0..CHUNK_SIZE.2 {
-                for y in 0..CHUNK_SIZE.1 {
-                    let wy = chunk.coord.y as i32 * CHUNK_SIZE.1 as i32 + y as i32;
+        for x in 0..CHUNK_SIZE {
+            for z in 0..CHUNK_SIZE {
+                for y in 0..CHUNK_SIZE {
+                    let wy = chunk.coord.y as i32 * CHUNK_SIZE as i32 + y as i32;
 
                     let flying_islands = self.sampler.sample(
                         chunk.coord,
                         x as f32, y as f32, z as f32,
                         SCALE * 0.8
                     );
-                    let flying_islands = flying_islands * (wy as f32 / CHUNK_SIZE.1 as f32);
+                    let flying_islands = flying_islands * (wy as f32 / CHUNK_SIZE as f32);
 
                     if flying_islands > 2.0 {
                         chunk.set_voxel(x, y, z, Blocks::STONE.default_state());
@@ -119,17 +119,17 @@ impl<T> World<T> {
     }
 
     pub fn get_voxel(&self, mut chunk: ChunkCoord, mut position: (i32, i32, i32)) -> Option<Voxel> {
-        if position.0 < 0 || position.0 >= CHUNK_SIZE.0 as i32 {
+        if position.0 < 0 || position.0 >= CHUNK_SIZE as i32 {
             chunk.x += if position.0 < 0 { -1 } else { 1 };
-            position.0 += if position.0 < 0 { CHUNK_SIZE.0 as i32 } else { -(CHUNK_SIZE.0 as i32) };
+            position.0 += if position.0 < 0 { CHUNK_SIZE as i32 } else { -(CHUNK_SIZE as i32) };
         }
-        if position.1 < 0 || position.1 >= CHUNK_SIZE.1 as i32 {
+        if position.1 < 0 || position.1 >= CHUNK_SIZE as i32 {
             chunk.y += if position.1 < 0 { -1 } else { 1 };
-            position.1 += if position.1 < 0 { CHUNK_SIZE.1 as i32 } else { -(CHUNK_SIZE.1 as i32) };
+            position.1 += if position.1 < 0 { CHUNK_SIZE as i32 } else { -(CHUNK_SIZE as i32) };
         }
-        if position.2 < 0 || position.2 >= CHUNK_SIZE.2 as i32 {
+        if position.2 < 0 || position.2 >= CHUNK_SIZE as i32 {
             chunk.z += if position.2 < 0 { -1 } else { 1 };
-            position.2 += if position.2 < 0 { CHUNK_SIZE.2 as i32 } else { -(CHUNK_SIZE.2 as i32) };
+            position.2 += if position.2 < 0 { CHUNK_SIZE as i32 } else { -(CHUNK_SIZE as i32) };
         }
 
         let chunk = &self.chunks.get(&chunk)?;
@@ -246,7 +246,7 @@ impl<T> World<T> {
 
     pub fn draw_distance(&self, render_pass: &mut wgpu::RenderPass, eye: cgmath::Vector3<f32>, max_chunks: usize) {
         for (coord, model) in self.models.iter() {
-            if coord.to_world().distance(eye) > (max_chunks as f32 * CHUNK_SIZE.0 as f32) {
+            if coord.to_world().distance(eye) > (max_chunks as f32 * CHUNK_SIZE as f32) {
                 continue;
             }
             // log::debug!("Drawing chunk at {}", coord);
@@ -275,9 +275,9 @@ impl<T> World<T> {
         let position = chunk_coord.to_world();
 
         let scale = cgmath::Vector3::new(
-            CHUNK_SIZE.0 as f32,
-            CHUNK_SIZE.1 as f32,
-            CHUNK_SIZE.2 as f32,
+            CHUNK_SIZE as f32,
+            CHUNK_SIZE as f32,
+            CHUNK_SIZE as f32,
         );
 
         debug.append_model(

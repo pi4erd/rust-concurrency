@@ -331,9 +331,9 @@ pub fn generate_model<T>(
     let mut vertices = Vec::new();
     let mut indices = Vec::new();
 
-    for x in 0..CHUNK_SIZE.0 as i32 {
-        for y in 0..CHUNK_SIZE.1 as i32 {
-            for z in 0..CHUNK_SIZE.2 as i32 {
+    for x in 0..CHUNK_SIZE as i32 {
+        for y in 0..CHUNK_SIZE as i32 {
+            for z in 0..CHUNK_SIZE as i32 {
                 let current_voxel = world.get_voxel(
                     chunk.coord,
                     (x, y, z),
