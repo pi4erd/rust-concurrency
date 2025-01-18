@@ -36,7 +36,7 @@ impl Camera {
     }
 
     pub fn right(&self) -> Vector3<f32> {
-        self.up().cross(self.direction)
+        self.up().cross(self.direction).normalize()
     }
 
     pub fn view(&self) -> Matrix4<f32> {
