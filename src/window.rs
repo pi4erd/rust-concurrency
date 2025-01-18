@@ -31,6 +31,7 @@ pub trait Game {
 pub struct GameWindow<T: Game> {
     window: Option<Arc<Window>>,
     game: Option<T>,
+    title: &'static str,
 }
 
 impl<T: Game> Default for GameWindow<T> {
@@ -38,13 +39,17 @@ impl<T: Game> Default for GameWindow<T> {
         Self {
             window: None,
             game: None,
+            title: "GameWindow",
         }
     }
 }
 
 impl<T: Game> GameWindow<T> {
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(title: &'static str) -> Self {
+        Self {
+            title,
+            ..Default::default()
+        }
     }
 }
 
@@ -54,6 +59,7 @@ impl<T: Game> ApplicationHandler for GameWindow<T> {
             event_loop
                 .create_window(WindowAttributes::default()
                     .with_inner_size(PhysicalSize::new(1280, 720))
+                    .with_title(self.title)
                 )
                 .unwrap(),
         ));
