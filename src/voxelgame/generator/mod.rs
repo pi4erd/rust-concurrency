@@ -3,12 +3,12 @@ pub mod voxel;
 pub mod meshgen;
 
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::{HashMap, HashSet, VecDeque},
     sync::{mpsc::{self, Receiver, Sender}, Arc, Mutex},
     thread::{self, JoinHandle}
 };
 
-use cgmath::Zero;
+use cgmath::{MetricSpace, Zero};
 use fastnoise_lite::FastNoiseLite;
 
 use chunk::{Chunk, ChunkCoord, CHUNK_SIZE};
@@ -61,21 +61,12 @@ impl NoiseGenerator {
 
 impl Generator for NoiseGenerator {
     fn generate(&self, chunk: &mut Chunk) {
-        const SCALE: f32 = 2.0;
+        const SCALE: f32 = 0.3;
 
         for x in 0..CHUNK_SIZE.0 {
             for z in 0..CHUNK_SIZE.2 {
-                let sample = self.sampler.sample(
-                    chunk.coord,
-                    x as f32, 0.0, z as f32,
-                    SCALE
-                ) * 0.5 + 0.5;
-
                 for y in 0..CHUNK_SIZE.1 {
                     let wy = chunk.coord.y as i32 * CHUNK_SIZE.1 as i32 + y as i32;
-                    if wy < sample as i32 {
-                        chunk.set_voxel(x, y, z, Blocks::STONE.default_state());
-                    }
 
                     let flying_islands = self.sampler.sample(
                         chunk.coord,
@@ -101,8 +92,9 @@ pub struct World<T> {
     models: HashMap<ChunkCoord, Model<Mesh>>,
     
     chunk_gen_queue: Arc<Mutex<Queue<ChunkCoord>>>,
-    meshgen_queue: Queue<ChunkCoord>,
+    meshgen_queue: Arc<Mutex<Queue<ChunkCoord>>>,
     world_gen_threads: Vec<JoinHandle<()>>,
+    sent_chunks: Arc<Mutex<HashSet<ChunkCoord>>>,
 
     receiver: Receiver<Chunk>,
     sender: Sender<Chunk>,
@@ -116,8 +108,10 @@ impl<T> World<T> {
             chunks: HashMap::new(),
             models: HashMap::new(),
             chunk_gen_queue: Arc::new(Mutex::new(Queue::new())),
-            meshgen_queue: Queue::new(),
+            
+            meshgen_queue: Arc::new(Mutex::new(Queue::new())),
             world_gen_threads: Vec::new(),
+            sent_chunks: Arc::new(Mutex::new(HashSet::new())),
 
             receiver: rx,
             sender: tx,
@@ -154,6 +148,8 @@ impl<T> World<T> {
             camera.eye.z,
         ));
         
+        let mut lock = self.chunk_gen_queue.lock().unwrap();
+        let mut set = self.sent_chunks.lock().unwrap();
         for i in -distance..=distance {
             for j in -distance..=distance {
                 for k in -distance..=distance {
@@ -162,14 +158,20 @@ impl<T> World<T> {
                         y: j,
                         z: k,
                     };
-                    self.enqueue_chunk_gen(chunk);
+                    
+                    if self.chunks.contains_key(&chunk) || set.contains(&chunk) {
+                        continue;
+                    }
+
+                    set.insert(chunk);
+                    lock.push_back(chunk);
                 }
             }
         }
     }
 
-    pub fn dispatch_threads(&mut self, n: usize) where T: 'static + Generator {
-        for _ in 0..n {
+    pub fn dispatch_threads(&mut self, worldgen: usize) where T: 'static + Generator {
+        for _ in 0..worldgen {
             let tx = self.sender.clone();
             let chunk_gen_queue = self.chunk_gen_queue.clone();
             let generator = self.generator.clone();
@@ -184,29 +186,21 @@ impl<T> World<T> {
                         let mut chunk = Chunk::new(chunk_to_generate);
                         generator.generate(&mut chunk);
     
-                        tx.send(chunk).unwrap();
-                    } else {
-                        std::thread::sleep(std::time::Duration::from_millis(100));
+                        log::info!("Generated chunk {}", chunk_to_generate);
+
+                        tx.send(chunk).expect("Channel was closed");
                     }
                 }
             }));
         }
     }
 
-    pub fn enqueue_chunk_gen(&mut self, coord: ChunkCoord) {
-        if self.chunks.contains_key(&coord) || self.chunk_gen_queue.lock().unwrap().contains(&coord) {
-            return;
-        }
-
-        self.chunk_gen_queue.lock().unwrap().push_back(coord);
-    }
-
-    pub fn receive_chunk(&mut self, millis: u64) {
-        let recv = self.receiver.recv_timeout(std::time::Duration::from_millis(millis));
+    pub fn receive_chunk(&mut self) {
+        let recv = self.receiver.try_recv();
         if let Ok(chunk) = recv {
             let coord = chunk.coord;
             self.chunks.insert(coord, chunk);
-            self.meshgen_queue.push_back(coord);
+            self.meshgen_queue.lock().unwrap().push_back(coord);
         }
     }
 
@@ -216,8 +210,12 @@ impl<T> World<T> {
         queue: &wgpu::Queue,
         bg_layout: &wgpu::BindGroupLayout,
     ) {
-        if let Some(coord) = self.meshgen_queue.pop_front() {
-            // TODO: Check if all neighbors present, otherwise not draw
+        let coord: Option<ChunkCoord>;
+        {
+            coord = self.meshgen_queue.lock().unwrap().pop_front();
+        }
+
+        if let Some(coord) = coord {
             if !(self.chunks.contains_key(&coord.left()) &&
                 self.chunks.contains_key(&coord.right()) &&
                 self.chunks.contains_key(&coord.front()) &&
@@ -225,7 +223,7 @@ impl<T> World<T> {
                 self.chunks.contains_key(&coord.up()) &&
                 self.chunks.contains_key(&coord.down()))
             {
-                self.meshgen_queue.push_back(coord);
+                self.meshgen_queue.lock().unwrap().push_back(coord);
                 return; // put back and try next time
             }
 
@@ -243,6 +241,16 @@ impl<T> World<T> {
                 );
                 self.models[&coord].update_buffer(queue);
             }
+        }
+    }
+
+    pub fn draw_distance(&self, render_pass: &mut wgpu::RenderPass, eye: cgmath::Vector3<f32>, max_chunks: usize) {
+        for (coord, model) in self.models.iter() {
+            if coord.to_world().distance(eye) > (max_chunks as f32 * CHUNK_SIZE.0 as f32) {
+                continue;
+            }
+            // log::debug!("Drawing chunk at {}", coord);
+            model.draw(render_pass);
         }
     }
 
@@ -282,14 +290,5 @@ impl<T> World<T> {
             scale,
             [1.0, 0.0, 1.0]
         );
-    }
-}
-
-impl<T: Generator> Drawable for World<T> {
-    fn draw(&self, render_pass: &mut wgpu::RenderPass) {
-        for (_coord, model) in self.models.iter() {
-            // log::debug!("Drawing chunk at {}", coord);
-            model.draw(render_pass);
-        }
     }
 }

@@ -2,7 +2,7 @@ use std::{fmt::Display, ops::{Add, Neg}};
 
 use super::voxel::{Blocks, Voxel};
 
-pub const CHUNK_SIZE: (usize, usize, usize) = (20, 20, 20);
+pub const CHUNK_SIZE: (usize, usize, usize) = (32, 32, 32); // TODO: Make chunks cubic
 const CHUNK_SIZE_ITEMS: usize = CHUNK_SIZE.0 * CHUNK_SIZE.1 * CHUNK_SIZE.2;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Hash)]

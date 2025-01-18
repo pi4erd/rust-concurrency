@@ -8,6 +8,7 @@ mod debug;
 use std::{collections::HashMap, sync::Arc, time::Instant};
 
 use camera::{Camera, CameraController};
+use cgmath::EuclideanSpace;
 use debug::{DebugDrawer, DebugVertex};
 use draw::Drawable;
 use generator::{NoiseGenerator, World};
@@ -121,14 +122,6 @@ impl<'w> VoxelGame<'w> {
         let mut world = World::new(NoiseGenerator::new(69420));
 
         world.dispatch_threads(3);
-        
-        // for x in -3..=3 {
-        //     for z in -3..=3 {
-        //         for y in -3..=3 {
-        //             world.enqueue_chunk_gen(ChunkCoord { x, y, z });
-        //         }
-        //     }
-        // }
 
         Self {
             window,
@@ -422,18 +415,14 @@ impl<'w> VoxelGame<'w> {
         );
     }
 
-    pub fn destroy(&mut self) {
-        
-    }
-
     fn update(&mut self, delta: f32) {
         self.camera_controller.update(&mut self.camera, delta);
 
         if self.generate {
-            self.world.enqueue_chunks_around(&self.camera, 6);
+            self.world.enqueue_chunks_around(&self.camera, 7);
         }
 
-        self.world.receive_chunk(1);
+        self.world.receive_chunk();
         self.world.dequeue_meshgen(&self.device, &self.queue, &self.bind_layouts["model"]);
 
         self.update_uniform_buffers();
@@ -449,11 +438,6 @@ impl<'w> VoxelGame<'w> {
     }
 
     fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
-        let time = (std::time::Instant::now() - self.start_time).as_secs_f32();
-        let delta = time - self.prev_time;
-        self.update(delta);
-        self.prev_time = time;
-
         let image = self.surface.get_current_texture()?;
 
         let view = image.texture.create_view(&wgpu::TextureViewDescriptor::default());
@@ -489,7 +473,7 @@ impl<'w> VoxelGame<'w> {
             opaque_pass.set_bind_group(1, &self.bind_groups["terrain_texture"], &[]);
             opaque_pass.set_bind_group(2, &self.bind_groups["camera"], &[]);
 
-            self.world.draw(&mut opaque_pass);
+            self.world.draw_distance(&mut opaque_pass, self.camera.eye.to_vec(), 16);
         }
 
         {
@@ -615,9 +599,13 @@ impl<'w> Game for VoxelGame<'w> {
     }
     
     fn about_to_wait(&mut self, _event_loop: &winit::event_loop::ActiveEventLoop) {
+        let time = (std::time::Instant::now() - self.start_time).as_secs_f32();
+        let delta = time - self.prev_time;
+        self.prev_time = time;
+        self.update(delta);
     }
 
     fn exiting(&mut self, _event_loop: &winit::event_loop::ActiveEventLoop) {
-        self.destroy();
+        log::info!("Stopping application.");
     }
 }
