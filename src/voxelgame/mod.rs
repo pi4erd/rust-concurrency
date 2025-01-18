@@ -9,10 +9,10 @@ use std::{collections::HashMap, sync::Arc, time::Instant};
 
 use camera::{Camera, CameraController};
 use cgmath::EuclideanSpace;
-use debug::{DebugDrawer, DebugVertex};
+use debug::{DebugDrawer, DebugModelInstance, DebugVertex};
 use draw::Drawable;
 use generator::{NoiseGenerator, World};
-use mesh::{Vertex, Vertex3d};
+use mesh::{Instance, Vertex, Vertex3d};
 use pollster::FutureExt;
 use texture::Texture2d;
 use wgpu::util::DeviceExt;
@@ -118,7 +118,7 @@ impl<'w> VoxelGame<'w> {
                     .expect("No cursor confine/lock available.")
             );
 
-        let debug = DebugDrawer::new();
+        let debug = DebugDrawer::new(&device);
         let mut world = World::new(NoiseGenerator::new(69420));
 
         world.dispatch_threads(3);
@@ -351,15 +351,24 @@ impl<'w> VoxelGame<'w> {
             cache: None,
         });
 
+        let debug_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: None,
+            bind_group_layouts: &[
+                &bind_layouts["camera"],
+            ],
+            push_constant_ranges: &[],
+        });
+
         let debug_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("debug_pipeline"),
-            layout: Some(&pipeline_layout),
+            layout: Some(&debug_layout),
             vertex: wgpu::VertexState {
                 module: &debug_module,
                 entry_point: Some("vs_main"),
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
                 buffers: &[
                     DebugVertex::desc(),
+                    DebugModelInstance::desc(),
                 ]
             },
             fragment: Some(wgpu::FragmentState {
@@ -430,11 +439,8 @@ impl<'w> VoxelGame<'w> {
         self.debug.new_frame();
         self.world.append_debug(
             &mut self.debug,
-            &self.camera,
-            &self.bind_layouts["model"],
-            &self.device,
-            &self.queue,
         );
+        self.debug.update_buffer(&self.queue);
     }
 
     fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
@@ -503,8 +509,7 @@ impl<'w> VoxelGame<'w> {
 
             debug_pass.set_pipeline(&self.pipelines["debug"]);
 
-            debug_pass.set_bind_group(1, &self.bind_groups["terrain_texture"], &[]);
-            debug_pass.set_bind_group(2, &self.bind_groups["camera"], &[]);
+            debug_pass.set_bind_group(0, &self.bind_groups["camera"], &[]);
 
             self.debug.draw(&mut debug_pass);
         }

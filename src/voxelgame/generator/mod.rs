@@ -8,7 +8,7 @@ use std::{
     thread::{self, JoinHandle}
 };
 
-use cgmath::{MetricSpace, Zero};
+use cgmath::MetricSpace;
 use fastnoise_lite::FastNoiseLite;
 
 use chunk::{Chunk, ChunkCoord, CHUNK_SIZE};
@@ -177,10 +177,10 @@ impl<T> World<T> {
             let generator = self.generator.clone();
             self.world_gen_threads.push(thread::spawn(move || {
                 loop {
-                    let chunk_to_generate: Option<ChunkCoord>;
-                    {
-                        chunk_to_generate = chunk_gen_queue.lock().unwrap().pop_front()
-                    }
+                    let chunk_to_generate: Option<ChunkCoord> = {
+                        let mut queue_lock = chunk_gen_queue.lock().unwrap();
+                        queue_lock.pop_front()
+                    };
     
                     if let Some(chunk_to_generate) = chunk_to_generate {
                         let mut chunk = Chunk::new(chunk_to_generate);
@@ -188,6 +188,10 @@ impl<T> World<T> {
     
                         log::info!("Generated chunk {}", chunk_to_generate);
 
+                        // FIXME: Sender overflows stack if chunk is too big
+                        // Probably could be fixed by just appending data to self.chunks directly
+                        // I wanted to use Sender/Receiver thing since it seemed convenient
+                        // Need to figure out if there is a limit for sending/receiving data
                         tx.send(chunk).expect("Channel was closed");
                     }
                 }
@@ -257,38 +261,22 @@ impl<T> World<T> {
     pub fn append_debug(
         &self,
         debug: &mut DebugDrawer,
-        observer: &Camera,
-        model_bg_layout: &wgpu::BindGroupLayout,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
     ) {
-        let chunk_coord = ChunkCoord::from_world(cgmath::Vector3::new(
-            observer.eye.x,
-            observer.eye.y,
-            observer.eye.z,
-        ));
+        for (coord, _) in self.models.iter() {
+            let position = coord.to_world();
 
-        if !self.chunks.contains_key(&chunk_coord) {
-            return;
+            let scale = cgmath::Vector3::new(
+                CHUNK_SIZE as f32,
+                CHUNK_SIZE as f32,
+                CHUNK_SIZE as f32,
+            );
+            
+            debug.append_mesh(
+                ModelName::Cube,
+                position,
+                scale,
+                [1.0, 0.0, 1.0, 0.0].into()
+            );
         }
-
-        let position = chunk_coord.to_world();
-
-        let scale = cgmath::Vector3::new(
-            CHUNK_SIZE as f32,
-            CHUNK_SIZE as f32,
-            CHUNK_SIZE as f32,
-        );
-
-        debug.append_model(
-            ModelName::Cube,
-            device,
-            queue,
-            model_bg_layout,
-            position,
-            cgmath::Quaternion::zero(),
-            scale,
-            [1.0, 0.0, 1.0]
-        );
     }
 }

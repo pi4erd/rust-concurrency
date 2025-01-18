@@ -2,7 +2,7 @@ use std::{fmt::Display, ops::{Add, Neg}};
 
 use super::voxel::{Blocks, Voxel};
 
-pub const CHUNK_SIZE: usize = 32;
+pub const CHUNK_SIZE: usize = 20;
 const CHUNK_SIZE_ITEMS: usize = CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Hash)]

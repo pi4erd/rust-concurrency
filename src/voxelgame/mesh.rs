@@ -1,3 +1,5 @@
+use std::ops::Range;
+
 use bytemuck::{Pod, Zeroable};
 use wgpu::util::DeviceExt;
 
@@ -74,6 +76,14 @@ impl Mesh {
             index_buffer,
             element_count: indices.len(),
         }
+    }
+
+    pub fn draw_instanced(&self, render_pass: &mut wgpu::RenderPass, instance_buffer: &wgpu::Buffer, instances: Range<u32>) {
+        render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+        render_pass.set_vertex_buffer(1, instance_buffer.slice(..));
+        render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+        
+        render_pass.draw_indexed(0..self.element_count as u32, 0, instances);
     }
 }
 
