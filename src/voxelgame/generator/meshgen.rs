@@ -353,7 +353,7 @@ pub fn generate_model<T>(
                     
                     if block_info.transparent {
                         let (vx, idx) = face(
-                            current_block_info.texture_id,
+                            current_block_info.texture_ids[0],
                             (x as usize, y as usize, z as usize),
                             FaceOrientation::Left
                         );
@@ -362,7 +362,7 @@ pub fn generate_model<T>(
                     }
                 } else {
                     let (vx, idx) = face(
-                        current_block_info.texture_id,
+                        current_block_info.texture_ids[0],
                         (x as usize, y as usize, z as usize),
                         FaceOrientation::Left
                     );
@@ -379,7 +379,7 @@ pub fn generate_model<T>(
                     
                     if block_info.transparent {
                         let (vx, idx) = face(
-                            current_block_info.texture_id,
+                            current_block_info.texture_ids[1],
                             (x as usize, y as usize, z as usize),
                             FaceOrientation::Right
                         );
@@ -388,7 +388,7 @@ pub fn generate_model<T>(
                     }
                 } else {
                     let (vx, idx) = face(
-                        current_block_info.texture_id,
+                        current_block_info.texture_ids[1],
                         (x as usize, y as usize, z as usize),
                         FaceOrientation::Right
                     );
@@ -405,7 +405,7 @@ pub fn generate_model<T>(
                     
                     if block_info.transparent {
                         let (vx, idx) = face(
-                            current_block_info.texture_id,
+                            current_block_info.texture_ids[2],
                             (x as usize, y as usize, z as usize),
                             FaceOrientation::Top
                         );
@@ -414,7 +414,7 @@ pub fn generate_model<T>(
                     }
                 } else {
                     let (vx, idx) = face(
-                        current_block_info.texture_id,
+                        current_block_info.texture_ids[2],
                         (x as usize, y as usize, z as usize),
                         FaceOrientation::Top
                     );
@@ -431,7 +431,7 @@ pub fn generate_model<T>(
                     
                     if block_info.transparent {
                         let (vx, idx) = face(
-                            current_block_info.texture_id,
+                            current_block_info.texture_ids[3],
                             (x as usize, y as usize, z as usize),
                             FaceOrientation::Bottom
                         );
@@ -440,7 +440,7 @@ pub fn generate_model<T>(
                     }
                 } else {
                     let (vx, idx) = face(
-                        current_block_info.texture_id,
+                        current_block_info.texture_ids[3],
                         (x as usize, y as usize, z as usize),
                         FaceOrientation::Bottom
                     );
@@ -457,7 +457,7 @@ pub fn generate_model<T>(
                     
                     if block_info.transparent {
                         let (vx, idx) = face(
-                            current_block_info.texture_id,
+                            current_block_info.texture_ids[4],
                             (x as usize, y as usize, z as usize),
                             FaceOrientation::Front
                         );
@@ -466,7 +466,7 @@ pub fn generate_model<T>(
                     }
                 } else {
                     let (vx, idx) = face(
-                        current_block_info.texture_id,
+                        current_block_info.texture_ids[4],
                         (x as usize, y as usize, z as usize),
                         FaceOrientation::Front
                     );
@@ -483,7 +483,7 @@ pub fn generate_model<T>(
                     
                     if block_info.transparent {
                         let (vx, idx) = face(
-                            current_block_info.texture_id,
+                            current_block_info.texture_ids[5],
                             (x as usize, y as usize, z as usize),
                             FaceOrientation::Back
                         );
@@ -492,7 +492,7 @@ pub fn generate_model<T>(
                     }
                 } else {
                     let (vx, idx) = face(
-                        current_block_info.texture_id,
+                        current_block_info.texture_ids[5],
                         (x as usize, y as usize, z as usize),
                         FaceOrientation::Back
                     );

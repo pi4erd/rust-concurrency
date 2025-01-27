@@ -47,6 +47,7 @@ pub struct VoxelGame<'w> {
     camera_controller: CameraController,
 
     generate: bool,
+    draw_debug: bool,
 }
 
 impl<'w> VoxelGame<'w> {
@@ -149,6 +150,7 @@ impl<'w> VoxelGame<'w> {
             camera_controller,
 
             generate: true,
+            draw_debug: false,
         }
     }
 
@@ -479,10 +481,10 @@ impl<'w> VoxelGame<'w> {
             opaque_pass.set_bind_group(1, &self.bind_groups["terrain_texture"], &[]);
             opaque_pass.set_bind_group(2, &self.bind_groups["camera"], &[]);
 
-            self.world.draw_distance(&mut opaque_pass, self.camera.eye.to_vec(), 16);
+            self.world.draw_distance(&mut opaque_pass, self.camera.eye.to_vec(), 10);
         }
 
-        {
+        if self.draw_debug {
             let mut debug_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,
                 color_attachments: &[
@@ -582,6 +584,12 @@ impl<'w> Game for VoxelGame<'w> {
                                 Some(_) => None,
                                 None => Some(winit::window::Fullscreen::Borderless(None)),
                             });
+                        }
+                        PhysicalKey::Code(KeyCode::KeyR) => {
+                            self.world.reset();
+                        }
+                        PhysicalKey::Code(KeyCode::KeyL) => {
+                            self.draw_debug = !self.draw_debug;
                         }
                         PhysicalKey::Code(KeyCode::KeyG) => {
                             self.generate = !self.generate;

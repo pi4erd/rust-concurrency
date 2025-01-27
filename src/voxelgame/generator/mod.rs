@@ -65,18 +65,33 @@ impl Generator for NoiseGenerator {
 
         for x in 0..CHUNK_SIZE {
             for z in 0..CHUNK_SIZE {
+                let height_sample = 5.0 + self.sampler.sample(
+                    ChunkCoord { x: chunk.coord.x, y: 0, z: chunk.coord.z},
+                    x as f32,
+                    0.0,
+                    z as f32,
+                    SCALE
+                ) * 30.0;
+
                 for y in 0..CHUNK_SIZE {
                     let wy = chunk.coord.y as i32 * CHUNK_SIZE as i32 + y as i32;
 
-                    let flying_islands = self.sampler.sample(
-                        chunk.coord,
-                        x as f32, y as f32, z as f32,
-                        SCALE * 0.8
-                    );
-                    let flying_islands = flying_islands * (wy as f32 / CHUNK_SIZE as f32);
+                    if wy <= height_sample as i32 {
+                        let cave_sample = self.sampler.sample(
+                            chunk.coord,
+                            x as f32, y as f32, z as f32,
+                            SCALE * 10.0
+                        );
+    
+                        if cave_sample < -0.5 {
+                            continue;
+                        }
 
-                    if flying_islands > 2.0 {
-                        chunk.set_voxel(x, y, z, Blocks::STONE.default_state());
+                        if wy - height_sample as i32 >= -1 {
+                            chunk.set_voxel(x, y, z, Blocks::GRASS_BLOCK.default_state());
+                        } else {
+                            chunk.set_voxel(x, y, z, Blocks::STONE.default_state());
+                        }
                     }
                 }
             }
@@ -101,6 +116,8 @@ pub struct World<T> {
 }
 
 impl<T> World<T> {
+    pub const MAX_QUEUE_SIZE: usize = 4096;
+
     pub fn new(generator: T) -> Self {
         let (tx, rx) = mpsc::channel::<Chunk>();
         Self {
@@ -116,6 +133,19 @@ impl<T> World<T> {
             receiver: rx,
             sender: tx,
         }
+    }
+
+    pub fn reset(&mut self) {
+        let mut sent = self.sent_chunks.lock().unwrap();
+        let mut genqueue = self.chunk_gen_queue.lock().unwrap();
+        let mut meshqueue = self.meshgen_queue.lock().unwrap();
+
+        sent.clear();
+        genqueue.clear();
+        meshqueue.clear();
+
+        self.chunks.clear();
+        self.models.clear();
     }
 
     pub fn get_voxel(&self, mut chunk: ChunkCoord, mut position: (i32, i32, i32)) -> Option<Voxel> {
@@ -148,7 +178,7 @@ impl<T> World<T> {
             camera.eye.z,
         ));
         
-        let mut lock = self.chunk_gen_queue.lock().unwrap();
+        let mut queue = self.chunk_gen_queue.lock().unwrap();
         let mut set = self.sent_chunks.lock().unwrap();
         for i in -distance..=distance {
             for j in -distance..=distance {
@@ -163,8 +193,13 @@ impl<T> World<T> {
                         continue;
                     }
 
+                    if queue.len() >= Self::MAX_QUEUE_SIZE {
+                        log::warn!("Queue limit reached!");
+                        queue.clear();
+                    }
+
                     set.insert(chunk);
-                    lock.push_back(chunk);
+                    queue.push_back(chunk);
                 }
             }
         }

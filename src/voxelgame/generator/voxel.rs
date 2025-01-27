@@ -11,7 +11,7 @@ pub struct RegisteredBlock {
     pub name: &'static str,
     pub transparent: bool,
     pub solid: bool,
-    pub texture_id: usize,
+    pub texture_ids: [usize; 6],
     default_state: Voxel,
 }
 
@@ -28,7 +28,7 @@ impl Blocks {
         name: "Air",
         transparent: true,
         solid: false,
-        texture_id: 0,
+        texture_ids: [0; 6],
         default_state: Voxel { id: 0 },
     };
 
@@ -36,7 +36,7 @@ impl Blocks {
         name: "Stone",
         transparent: false,
         solid: true,
-        texture_id: 1,
+        texture_ids: [1; 6],
         default_state: Voxel { id: 1 },
     };
 
@@ -44,7 +44,7 @@ impl Blocks {
         name: "Grass Block",
         transparent: false,
         solid: true,
-        texture_id: 2,
+        texture_ids: [2; 6],
         default_state: Voxel { id: 2 },
     };
 
