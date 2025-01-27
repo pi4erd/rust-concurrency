@@ -11,7 +11,7 @@ use camera::{Camera, CameraController};
 use cgmath::EuclideanSpace;
 use debug::{DebugDrawer, DebugModelInstance, DebugVertex};
 use draw::Drawable;
-use generator::{NoiseGenerator, World};
+use generator::{NoiseGenerator, Ray, World};
 use mesh::{Instance, Vertex, Vertex3d};
 use pollster::FutureExt;
 use texture::Texture2d;
@@ -434,7 +434,10 @@ impl<'w> VoxelGame<'w> {
         }
 
         self.world.receive_chunk();
-        self.world.dequeue_meshgen(&self.device, &self.queue, &self.bind_layouts["model"]);
+
+        for _ in 0..16 {
+            self.world.dequeue_meshgen(&self.device, &self.queue, &self.bind_layouts["model"]);
+        }
 
         self.update_uniform_buffers();
 
@@ -442,6 +445,26 @@ impl<'w> VoxelGame<'w> {
         self.world.append_debug(
             &mut self.debug,
         );
+
+        let hit = self.world.ray_hit(Ray {
+            origin:self.camera.eye,
+            direction: self.camera.direction
+        });
+
+        if let Some((position, _)) = hit {
+            log::debug!("Hit at {:?}", position);
+            self.debug.append_mesh(
+                debug::ModelName::Cube,
+                cgmath::Vector3::new(
+                    position.x as f32,
+                    position.y as f32,
+                    position.z as f32,
+                ),
+                cgmath::Vector3::new(1.0, 1.0, 1.0),
+                cgmath::Vector4::new(1.0, 0.0, 0.0, 1.0),
+            );
+        }
+
         self.debug.update_buffer(&self.queue);
     }
 

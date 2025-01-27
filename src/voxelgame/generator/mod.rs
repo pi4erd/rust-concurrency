@@ -8,7 +8,7 @@ use std::{
     thread::{self, JoinHandle}
 };
 
-use cgmath::MetricSpace;
+use cgmath::{EuclideanSpace, MetricSpace};
 use fastnoise_lite::FastNoiseLite;
 
 use chunk::{Chunk, ChunkCoord, CHUNK_SIZE};
@@ -80,10 +80,16 @@ impl Generator for NoiseGenerator {
                         let cave_sample = self.sampler.sample(
                             chunk.coord,
                             x as f32, y as f32, z as f32,
-                            SCALE * 10.0
+                            SCALE * 4.0
                         );
+
+                        let caviness = self.sampler.sample(
+                            chunk.coord,
+                            x as f32, y as f32, z as f32,
+                            SCALE * 2.0
+                        ) * 0.5 + 0.5 + wy as f32 * 0.1;
     
-                        if cave_sample < -0.5 {
+                        if cave_sample * (1.0 - caviness) < -0.2 {
                             continue;
                         }
 
@@ -97,6 +103,11 @@ impl Generator for NoiseGenerator {
             }
         }
     }
+}
+
+pub struct Ray {
+    pub origin: cgmath::Point3<f32>,
+    pub direction: cgmath::Vector3<f32>,
 }
 
 type Queue<T> = VecDeque<T>;
@@ -171,6 +182,7 @@ impl<T> World<T> {
     }
 
     pub fn enqueue_chunks_around(&mut self, camera: &Camera, distance: usize) {
+        // TODO: Improve this function for more dynamic generation
         let distance = distance as i32;
         let center = ChunkCoord::from_world(cgmath::Vector3::new(
             camera.eye.x,
@@ -184,9 +196,9 @@ impl<T> World<T> {
             for j in -distance..=distance {
                 for k in -distance..=distance {
                     let chunk = center + ChunkCoord {
-                        x: i,
-                        y: j,
-                        z: k,
+                        x: k,
+                        y: -i,
+                        z: j,
                     };
                     
                     if self.chunks.contains_key(&chunk) || set.contains(&chunk) {
@@ -241,6 +253,48 @@ impl<T> World<T> {
             self.chunks.insert(coord, chunk);
             self.meshgen_queue.lock().unwrap().push_back(coord);
         }
+    }
+
+    pub fn ray_hit(&self, ray: Ray) -> Option<(cgmath::Vector3<i32>, Voxel)> {
+        const MAX_DISTANCE: f32 = 32.0;
+        const STEP_SIZE: f32 = 0.5;
+        const STEP_COUNT: usize = (MAX_DISTANCE / STEP_SIZE) as usize;
+
+        for step in 0..STEP_COUNT {
+            let distance = STEP_SIZE * step as f32;
+            let point = ray.origin + ray.direction * distance;
+
+            let vec = point.to_vec();
+            let chunk_coord = ChunkCoord::from_world(vec);
+            let local_coord = vec - chunk_coord.to_world();
+
+            let global_block_coord = cgmath::Vector3::new(
+                vec.x as i32,
+                vec.y as i32,
+                vec.z as i32,
+            );
+
+            let result = self.get_voxel(
+                chunk_coord,
+                (
+                    local_coord.x as i32,
+                    local_coord.y as i32,
+                    local_coord.z as i32,
+                )
+            );
+            if let Some(voxel) = result {
+                if !Blocks::BLOCKS[voxel.id as usize].solid {
+                    continue;
+                }
+
+                return Some((
+                    global_block_coord,
+                    voxel
+                ));
+            }
+        }
+
+        None
     }
 
     pub fn dequeue_meshgen(
