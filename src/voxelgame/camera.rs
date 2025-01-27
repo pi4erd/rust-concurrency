@@ -1,3 +1,5 @@
+use std::f32::consts::FRAC_PI_2;
+
 use bytemuck::{Pod, Zeroable};
 use cgmath::{InnerSpace, Matrix3, Matrix4, Point3, SquareMatrix, Vector3};
 use winit::{
@@ -146,8 +148,9 @@ impl CameraController {
     pub fn process_device_events(&mut self, device_event: &DeviceEvent) {
         match device_event {
             DeviceEvent::MouseMotion { delta } => {
-                self.camera_motion.0 -= delta.0 as f32;
-                self.camera_motion.1 -= delta.1 as f32;
+                self.camera_motion.0 -= delta.0 as f32 * self.sensitivity;
+                self.camera_motion.1 -= delta.1 as f32 * self.sensitivity;
+                self.camera_motion.1 = self.camera_motion.1.clamp(-FRAC_PI_2 + 0.001, FRAC_PI_2 - 0.001);
             }
             _ => {}
         }
@@ -156,11 +159,11 @@ impl CameraController {
     pub fn update(&mut self, camera: &mut Camera, delta: f32) {
         let roty = Matrix3::from_axis_angle(
             Vector3::unit_y(),
-            cgmath::Rad(self.camera_motion.0 * self.sensitivity)
+            cgmath::Rad(self.camera_motion.0)
         );
         let rotx = Matrix3::from_axis_angle(
             Vector3::unit_x(),
-            cgmath::Rad(self.camera_motion.1 * self.sensitivity)
+            cgmath::Rad(self.camera_motion.1)
         );
 
         camera.direction = roty * rotx * Vector3::unit_z();
