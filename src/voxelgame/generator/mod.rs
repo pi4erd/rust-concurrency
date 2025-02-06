@@ -114,7 +114,7 @@ type Queue<T> = VecDeque<T>;
 
 pub struct World<T> {
     generator: Arc<T>,
-    chunks: HashMap<ChunkCoord, Chunk>,
+    chunks: HashMap<ChunkCoord, Box<Chunk>>,
     models: HashMap<ChunkCoord, Model<Mesh>>,
     
     chunk_gen_queue: Arc<Mutex<Queue<ChunkCoord>>>,
@@ -122,15 +122,15 @@ pub struct World<T> {
     world_gen_threads: Vec<JoinHandle<()>>,
     sent_chunks: Arc<Mutex<HashSet<ChunkCoord>>>,
 
-    receiver: Receiver<Chunk>,
-    sender: Sender<Chunk>,
+    receiver: Receiver<Box<Chunk>>,
+    sender: Sender<Box<Chunk>>,
 }
 
 impl<T> World<T> {
     pub const MAX_QUEUE_SIZE: usize = 4096;
 
     pub fn new(generator: T) -> Self {
-        let (tx, rx) = mpsc::channel::<Chunk>();
+        let (tx, rx) = mpsc::channel::<Box<Chunk>>();
         Self {
             generator: Arc::new(generator),
             chunks: HashMap::new(),
@@ -230,15 +230,12 @@ impl<T> World<T> {
                     };
     
                     if let Some(chunk_to_generate) = chunk_to_generate {
-                        let mut chunk = Chunk::new(chunk_to_generate);
+                        let mut chunk = Box::new(Chunk::new(chunk_to_generate));
                         generator.generate(&mut chunk);
     
                         log::info!("Generated chunk {}", chunk_to_generate);
 
-                        // FIXME: Sender overflows stack if chunk is too big
-                        // Probably could be fixed by just appending data to self.chunks directly
-                        // I wanted to use Sender/Receiver thing since it seemed convenient
-                        // Need to figure out if there is a limit for sending/receiving data
+                        // NOTE: Previous issue here is fixed by Box
                         tx.send(chunk).expect("Channel was closed");
                     }
                 }

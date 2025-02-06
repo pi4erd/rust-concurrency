@@ -50,9 +50,11 @@ impl Camera {
     }
 
     pub fn uniform(&self) -> CameraUniform {
+        let view = self.view();
+
         CameraUniform {
-            view: self.view().into(),
-            inverse_view: self.view().invert().unwrap().into(),
+            view: view.into(),
+            inverse_view: view.invert().unwrap().into(),
             projection: self.projection(self.aspect).into(),
         }
     }

@@ -14,6 +14,7 @@ use draw::Drawable;
 use generator::{NoiseGenerator, Ray, World};
 use mesh::{Instance, Vertex, Vertex3d};
 use pollster::FutureExt;
+use rand::Rng;
 use texture::Texture2d;
 use wgpu::util::DeviceExt;
 use winit::{dpi::PhysicalSize, event::WindowEvent, keyboard::{KeyCode, PhysicalKey}, window::{CursorGrabMode, Window}};
@@ -112,17 +113,19 @@ impl<'w> VoxelGame<'w> {
             &bind_layouts,
         );
 
+        let debug = DebugDrawer::new(&device);
+
+        let mut rng = rand::rng();
+        let mut world = World::new(NoiseGenerator::new(rng.random_range(i32::MIN..i32::MAX)));
+
+        world.dispatch_threads(3);
+
         window.set_cursor_visible(false);
         window.set_cursor_grab(CursorGrabMode::Locked)
             .unwrap_or_else(
                 |_| window.set_cursor_grab(CursorGrabMode::Confined)
                     .expect("No cursor confine/lock available.")
             );
-
-        let debug = DebugDrawer::new(&device);
-        let mut world = World::new(NoiseGenerator::new(69420));
-
-        world.dispatch_threads(3);
 
         Self {
             window,
@@ -294,6 +297,7 @@ impl<'w> VoxelGame<'w> {
 
         let opaque_module = device.create_shader_module(wgpu::include_wgsl!("shaders/opaque.wgsl"));
         let debug_module = device.create_shader_module(wgpu::include_wgsl!("shaders/debug.wgsl"));
+        let sky_module = device.create_shader_module(wgpu::include_wgsl!("shaders/sky.wgsl"));
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
@@ -353,7 +357,7 @@ impl<'w> VoxelGame<'w> {
             cache: None,
         });
 
-        let debug_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        let camera_only_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[
                 &bind_layouts["camera"],
@@ -363,7 +367,7 @@ impl<'w> VoxelGame<'w> {
 
         let debug_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("debug_pipeline"),
-            layout: Some(&debug_layout),
+            layout: Some(&camera_only_layout),
             vertex: wgpu::VertexState {
                 module: &debug_module,
                 entry_point: Some("vs_main"),
@@ -410,8 +414,49 @@ impl<'w> VoxelGame<'w> {
             cache: None,
         });
 
+        let sky_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("sky_pipeline"),
+            layout: Some(&camera_only_layout),
+            vertex: wgpu::VertexState {
+                module: &sky_module,
+                entry_point: Some("vs_main"),
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                buffers: &[],
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &sky_module,
+                entry_point: Some("fs_main"),
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                targets: &[
+                    Some(wgpu::ColorTargetState {
+                        format: surface_config.format,
+                        blend: None,
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })
+                ]
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleStrip,
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode: None,
+                unclipped_depth: false,
+                polygon_mode: wgpu::PolygonMode::Fill,
+                conservative: false,
+            },
+            multisample: wgpu::MultisampleState {
+                count: 1,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+            depth_stencil: None,
+            multiview: None,
+            cache: None,
+        });
+
         map.insert(String::from("opaque"), opaque_pipeline);
         map.insert(String::from("debug"), debug_pipeline);
+        map.insert(String::from("sky"), sky_pipeline);
 
         map
     }
@@ -474,6 +519,32 @@ impl<'w> VoxelGame<'w> {
         let view = image.texture.create_view(&wgpu::TextureViewDescriptor::default());
         
         let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+
+        {
+            let mut sky_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: None,
+                color_attachments: &[
+                    Some(wgpu::RenderPassColorAttachment {
+                        view: &view,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                            store: wgpu::StoreOp::Store,
+                        }
+                    })
+                ],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+
+            sky_pass.set_pipeline(&self.pipelines["sky"]);
+
+            sky_pass.set_bind_group(0, &self.bind_groups["camera"], &[]);
+
+            sky_pass.draw(0..4, 0..1);
+        }
+
         {
             let mut opaque_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,
@@ -482,7 +553,7 @@ impl<'w> VoxelGame<'w> {
                         view: &view,
                         resolve_target: None,
                         ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                            load: wgpu::LoadOp::Load,
                             store: wgpu::StoreOp::Store,
                         }
                     })
@@ -504,7 +575,7 @@ impl<'w> VoxelGame<'w> {
             opaque_pass.set_bind_group(1, &self.bind_groups["terrain_texture"], &[]);
             opaque_pass.set_bind_group(2, &self.bind_groups["camera"], &[]);
 
-            self.world.draw_distance(&mut opaque_pass, self.camera.eye.to_vec(), 10);
+            self.world.draw_distance(&mut opaque_pass, self.camera.eye.to_vec(), 32);
         }
 
         if self.draw_debug {

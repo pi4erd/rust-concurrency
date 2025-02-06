@@ -2,7 +2,7 @@ use std::{fmt::Display, ops::{Add, Neg}};
 
 use super::voxel::{Blocks, Voxel};
 
-pub const CHUNK_SIZE: usize = 24; // NOTE: size > 20 crashes debug build
+pub const CHUNK_SIZE: usize = 32; // NOTE: size > 20 crashes debug build
 const CHUNK_SIZE_ITEMS: usize = CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Hash)]
