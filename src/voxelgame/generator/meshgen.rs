@@ -1,6 +1,6 @@
 use crate::voxelgame::{draw::Model, mesh::{Mesh, Vertex3d}};
 
-use super::{chunk::{Chunk, CHUNK_SIZE}, voxel::Blocks, World};
+use super::{chunk::{BlockOffsetCoord, Chunk, WorldCoord, CHUNK_SIZE}, voxel::Blocks, World};
 
 pub const TEXTURE_COUNT: (usize, usize) = (32, 32);
 pub const TEXTURE_UV_STEP: (f32, f32) = (1.0 / TEXTURE_COUNT.0 as f32, 1.0 / TEXTURE_COUNT.1 as f32);
@@ -334,10 +334,13 @@ pub fn generate_model<T>(
     for x in 0..CHUNK_SIZE as i32 {
         for y in 0..CHUNK_SIZE as i32 {
             for z in 0..CHUNK_SIZE as i32 {
-                let current_voxel = world.get_voxel(
+                let sampled_coord = WorldCoord::from_chunk_and_local(
                     chunk.coord,
-                    (x, y, z),
-                ).unwrap();
+                    BlockOffsetCoord {
+                        x, y, z
+                    }
+                );
+                let current_voxel = world.get_voxel(sampled_coord).unwrap();
                 let current_block_info = Blocks::BLOCKS[current_voxel.id as usize];
 
                 if current_block_info.transparent {
@@ -345,10 +348,7 @@ pub fn generate_model<T>(
                 }
 
                 // Left
-                if let Some(voxel) = world.get_voxel(
-                    chunk.coord,
-                    (x - 1, y, z),
-                ) {
+                if let Some(voxel) = world.get_voxel(sampled_coord.left()) {
                     let block_info = Blocks::BLOCKS[voxel.id as usize];
                     
                     if block_info.transparent {
@@ -371,10 +371,7 @@ pub fn generate_model<T>(
                 }
 
                 // Right
-                if let Some(voxel) = world.get_voxel(
-                    chunk.coord,
-                    (x + 1, y, z),
-                ) {
+                if let Some(voxel) = world.get_voxel(sampled_coord.right()) {
                     let block_info = Blocks::BLOCKS[voxel.id as usize];
                     
                     if block_info.transparent {
@@ -397,10 +394,7 @@ pub fn generate_model<T>(
                 }
 
                 // Top
-                if let Some(voxel) = world.get_voxel(
-                    chunk.coord,
-                    (x, y + 1, z),
-                ) {
+                if let Some(voxel) = world.get_voxel(sampled_coord.up()) {
                     let block_info = Blocks::BLOCKS[voxel.id as usize];
                     
                     if block_info.transparent {
@@ -423,10 +417,7 @@ pub fn generate_model<T>(
                 }
                 
                 // Bottom
-                if let Some(voxel) = world.get_voxel(
-                    chunk.coord,
-                    (x, y - 1, z),
-                ) {
+                if let Some(voxel) = world.get_voxel(sampled_coord.down()) {
                     let block_info = Blocks::BLOCKS[voxel.id as usize];
                     
                     if block_info.transparent {
@@ -449,10 +440,7 @@ pub fn generate_model<T>(
                 }
 
                 // Front
-                if let Some(voxel) = world.get_voxel(
-                    chunk.coord,
-                    (x, y, z - 1),
-                ) {
+                if let Some(voxel) = world.get_voxel(sampled_coord.front()) {
                     let block_info = Blocks::BLOCKS[voxel.id as usize];
                     
                     if block_info.transparent {
@@ -475,10 +463,7 @@ pub fn generate_model<T>(
                 }
 
                 // Back
-                if let Some(voxel) = world.get_voxel(
-                    chunk.coord,
-                    (x, y, z + 1),
-                ) {
+                if let Some(voxel) = world.get_voxel(sampled_coord.back()) {
                     let block_info = Blocks::BLOCKS[voxel.id as usize];
                     
                     if block_info.transparent {
@@ -512,7 +497,7 @@ pub fn generate_model<T>(
         device,
         Mesh::create(device, &vertices, &indices)
     );
-    model.position = chunk.coord.to_world();
+    model.position = chunk.coord.into();
 
     Some(model)
 }

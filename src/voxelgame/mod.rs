@@ -4,6 +4,7 @@ mod mesh;
 mod draw;
 mod generator;
 mod debug;
+mod tests;
 
 use std::{collections::HashMap, sync::Arc, time::Instant};
 
@@ -11,7 +12,7 @@ use camera::{Camera, CameraController};
 use cgmath::EuclideanSpace;
 use debug::{DebugDrawer, DebugModelInstance, DebugVertex};
 use draw::Drawable;
-use generator::{chunk::{ChunkCoord, CHUNK_SIZE}, NoiseGenerator, Ray, World};
+use generator::{NoiseGenerator, Ray, World};
 use mesh::{Instance, Vertex, Vertex3d};
 use pollster::FutureExt;
 use rand::Rng;
@@ -118,7 +119,7 @@ impl<'w> VoxelGame<'w> {
         let mut rng = rand::rng();
         let mut world = World::new(NoiseGenerator::new(rng.random_range(i32::MIN..i32::MAX)));
 
-        world.dispatch_threads(3);
+        world.dispatch_threads(1);
 
         window.set_cursor_visible(false);
         window.set_cursor_grab(CursorGrabMode::Locked)
@@ -483,7 +484,14 @@ impl<'w> VoxelGame<'w> {
 
         self.world.receive_chunk();
 
-        for _ in 0..16 {
+        let start = Instant::now();
+        for _ in 0..32 {
+            let elapsed = (Instant::now() - start).as_secs_f64();
+
+            if elapsed >= 0.01 {
+                break;
+            }
+
             self.world.dequeue_meshgen(&self.device, &self.queue, &self.bind_layouts["model"]);
         }
 
@@ -495,7 +503,7 @@ impl<'w> VoxelGame<'w> {
         // );
         
         let hit = self.world.ray_hit(Ray {
-            origin:self.camera.eye,
+            origin: self.camera.eye,
             direction: -self.camera.direction // TODO: Figure out why negative
         }, None);
 
@@ -508,7 +516,7 @@ impl<'w> VoxelGame<'w> {
                     position.z as f32,
                 ) - cgmath::Vector3::new(0.05, 0.05, 0.05),
                 cgmath::Vector3::new(1.1, 1.1, 1.1),
-                cgmath::Vector4::new(1.0, 0.0, 0.0, 1.0),
+                cgmath::Vector4::new(0.0, 0.0, 0.0, 1.0),
             );
         }
 
@@ -681,20 +689,7 @@ impl<'w> Game for VoxelGame<'w> {
                             }, None);
 
                             if let Some((world_coord, _)) = hit {
-                                let chunk_coord = ChunkCoord::from_world(cgmath::Vector3::new(
-                                    world_coord.x as f32,
-                                    world_coord.y as f32,
-                                    world_coord.z as f32,
-                                ));
-                                let local_coord = cgmath::Vector3::new(
-                                    world_coord.x % CHUNK_SIZE as i32,
-                                    world_coord.y % CHUNK_SIZE as i32,
-                                    world_coord.z % CHUNK_SIZE as i32,
-                                );
-                                self.world.break_block(
-                                    chunk_coord,
-                                    (local_coord.x, local_coord.y, local_coord.z)
-                                );
+                                self.world.break_block(world_coord);
                             }
                         }
                         _ => {}

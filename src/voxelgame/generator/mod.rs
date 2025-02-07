@@ -11,7 +11,7 @@ use std::{
 use cgmath::{EuclideanSpace, MetricSpace};
 use fastnoise_lite::FastNoiseLite;
 
-use chunk::{Chunk, ChunkCoord, CHUNK_SIZE};
+use chunk::{Chunk, ChunkCoord, ChunkLocalCoord, WorldCoord, CHUNK_SIZE};
 use meshgen::generate_model;
 use voxel::{Blocks, Voxel};
 
@@ -65,16 +65,20 @@ impl Generator for NoiseGenerator {
 
         for x in 0..CHUNK_SIZE {
             for z in 0..CHUNK_SIZE {
-                let height_sample = 5.0 + self.sampler.sample(
+                let height_sample = 40.0 + self.sampler.sample(
                     ChunkCoord { x: chunk.coord.x, y: 0, z: chunk.coord.z},
                     x as f32,
                     0.0,
                     z as f32,
                     SCALE
-                ) * 30.0;
+                ) * 90.0;
 
                 for y in 0..CHUNK_SIZE {
                     let wy = chunk.coord.y as i32 * CHUNK_SIZE as i32 + y as i32;
+
+                    let coord = ChunkLocalCoord {
+                        x, y, z,
+                    };
 
                     if wy <= height_sample as i32 {
                         let cave_sample = self.sampler.sample(
@@ -94,9 +98,9 @@ impl Generator for NoiseGenerator {
                         }
 
                         if wy - height_sample as i32 >= -1 {
-                            chunk.set_voxel(x, y, z, Blocks::GRASS_BLOCK.default_state());
+                            chunk.set_voxel(coord, Blocks::GRASS_BLOCK.default_state());
                         } else {
-                            chunk.set_voxel(x, y, z, Blocks::STONE.default_state());
+                            chunk.set_voxel(coord, Blocks::STONE.default_state());
                         }
                     }
                 }
@@ -159,49 +163,23 @@ impl<T> World<T> {
         self.models.clear();
     }
 
-    pub fn get_voxel(&self, mut chunk: ChunkCoord, mut position: (i32, i32, i32)) -> Option<Voxel> {
-        if position.0 < 0 || position.0 >= CHUNK_SIZE as i32 {
-            chunk.x += if position.0 < 0 { -1 } else { 1 };
-            position.0 += if position.0 < 0 { CHUNK_SIZE as i32 } else { -(CHUNK_SIZE as i32) };
-        }
-        if position.1 < 0 || position.1 >= CHUNK_SIZE as i32 {
-            chunk.y += if position.1 < 0 { -1 } else { 1 };
-            position.1 += if position.1 < 0 { CHUNK_SIZE as i32 } else { -(CHUNK_SIZE as i32) };
-        }
-        if position.2 < 0 || position.2 >= CHUNK_SIZE as i32 {
-            chunk.z += if position.2 < 0 { -1 } else { 1 };
-            position.2 += if position.2 < 0 { CHUNK_SIZE as i32 } else { -(CHUNK_SIZE as i32) };
-        }
+    pub fn get_voxel(&self, position: WorldCoord) -> Option<Voxel> {
+        let chunk_coord: ChunkCoord = position.into();
+        let local_coord: ChunkLocalCoord = position.into();
 
-        let chunk = &self.chunks.get(&chunk)?;
-        chunk.get_voxel(
-            position.0 as usize,
-            position.1 as usize,
-            position.2 as usize,
-        )
+        let chunk = &self.chunks.get(&chunk_coord)?;
+        chunk.get_voxel(local_coord)
     }
 
-    pub fn break_block(&mut self, mut chunk: ChunkCoord, mut position: (i32, i32, i32)) {
-        if position.0 < 0 || position.0 >= CHUNK_SIZE as i32 {
-            chunk.x += if position.0 < 0 { -1 } else { 1 };
-            position.0 += if position.0 < 0 { CHUNK_SIZE as i32 } else { -(CHUNK_SIZE as i32) };
-        }
-        if position.1 < 0 || position.1 >= CHUNK_SIZE as i32 {
-            chunk.y += if position.1 < 0 { -1 } else { 1 };
-            position.1 += if position.1 < 0 { CHUNK_SIZE as i32 } else { -(CHUNK_SIZE as i32) };
-        }
-        if position.2 < 0 || position.2 >= CHUNK_SIZE as i32 {
-            chunk.z += if position.2 < 0 { -1 } else { 1 };
-            position.2 += if position.2 < 0 { CHUNK_SIZE as i32 } else { -(CHUNK_SIZE as i32) };
-        }
+    pub fn break_block(&mut self, position: WorldCoord) {
+        let chunk_coord: ChunkCoord = position.into();
+        let local_coord: ChunkLocalCoord = position.into();
 
-        let chunk = self.chunks.get_mut(&chunk);
+        let chunk = self.chunks.get_mut(&chunk_coord);
 
         if let Some(chunk) = chunk {
             chunk.set_voxel(
-                position.0 as usize,
-                position.1 as usize,
-                position.2 as usize,
+                local_coord,
                 Blocks::AIR.default_state(),
             );
 
@@ -211,15 +189,12 @@ impl<T> World<T> {
         }
     }
 
-
     pub fn enqueue_chunks_around(&mut self, camera: &Camera, distance: usize) {
         // TODO: Improve this function for more dynamic generation
         let distance = distance as i32;
-        let center = ChunkCoord::from_world(cgmath::Vector3::new(
-            camera.eye.x,
-            camera.eye.y,
-            camera.eye.z,
-        ));
+
+        let world_coord: WorldCoord = camera.eye.to_vec().into();
+        let center = ChunkCoord::from(world_coord);
         
         let mut queue = self.chunk_gen_queue.lock().unwrap();
         let mut set = self.sent_chunks.lock().unwrap();
@@ -283,7 +258,7 @@ impl<T> World<T> {
         }
     }
 
-    pub fn ray_hit(&self, ray: Ray, mut debug: Option<&mut DebugDrawer>) -> Option<(cgmath::Vector3<i32>, Voxel)> {
+    pub fn ray_hit(&self, ray: Ray, mut debug: Option<&mut DebugDrawer>) -> Option<(WorldCoord, Voxel)> {
         const MAX_DISTANCE: f32 = 32.0;
 
         let mut distance = 0.0;
@@ -291,43 +266,19 @@ impl<T> World<T> {
         while distance < MAX_DISTANCE {
             let point = ray.origin + ray.direction * distance;
 
-            let vec = point.to_vec();
-            let chunk_coord = ChunkCoord::from_world(vec);
-            let local_coord = vec - chunk_coord.to_world();
-
-            let mut global_block_coord = cgmath::Vector3::new(
-                vec.x as i32,
-                vec.y as i32,
-                vec.z as i32,
-            );
-
-            if chunk_coord.x < 0 {
-                global_block_coord.x -= 1;
-            }
-            if chunk_coord.y < 0 {
-                global_block_coord.y -= 1;
-            }
-            if chunk_coord.z < 0 {
-                global_block_coord.z -= 1;
-            }
+            let world_coord: WorldCoord = point.to_vec().into();
 
             if let Some(debug) = debug.as_mut() {
+                let world_coord_f32: cgmath::Vector3<f32> = world_coord.into();
                 debug.append_mesh(
                     ModelName::Cube,
-                    vec - cgmath::Vector3::new(0.05, 0.05, 0.05),
+                    world_coord_f32 - cgmath::Vector3::new(0.05, 0.05, 0.05),
                     cgmath::Vector3::new(0.1, 0.1, 0.1),
                     cgmath::Vector4::new(1.0, 0.0, 1.0, 0.3),
                 );
             }
 
-            let result = self.get_voxel(
-                chunk_coord,
-                (
-                    local_coord.x as i32,
-                    local_coord.y as i32,
-                    local_coord.z as i32,
-                )
-            );
+            let result = self.get_voxel(world_coord);
 
             distance += 0.1;
 
@@ -337,7 +288,7 @@ impl<T> World<T> {
                 }
 
                 return Some((
-                    global_block_coord,
+                    world_coord,
                     voxel
                 ));
             }
@@ -388,7 +339,8 @@ impl<T> World<T> {
 
     pub fn draw_distance(&self, render_pass: &mut wgpu::RenderPass, eye: cgmath::Vector3<f32>, max_chunks: usize) {
         for (coord, model) in self.models.iter() {
-            if coord.to_world().distance(eye) > (max_chunks as f32 * CHUNK_SIZE as f32) {
+            let position: cgmath::Vector3<f32> = (*coord).into(); // rust being weird
+            if position.distance(eye) > (max_chunks as f32 * CHUNK_SIZE as f32) {
                 continue;
             }
             // log::debug!("Drawing chunk at {}", coord);
@@ -401,7 +353,7 @@ impl<T> World<T> {
         debug: &mut DebugDrawer,
     ) {
         for (coord, _) in self.models.iter() {
-            let position = coord.to_world();
+            let position = (*coord).into(); // rust being weird again
 
             let scale = cgmath::Vector3::new(
                 CHUNK_SIZE as f32,
