@@ -29,7 +29,7 @@ fn face(texture_id: usize, offset: (usize, usize, usize), orientation: FaceOrien
                 normal: [0.0, 0.0, 1.0],
                 uv: [
                     texture_offset.0 + TEXTURE_UV_STEP.0,
-                    texture_offset.1
+                    texture_offset.1 + TEXTURE_UV_STEP.1,
                 ],
             },
             Vertex3d {
@@ -41,7 +41,7 @@ fn face(texture_id: usize, offset: (usize, usize, usize), orientation: FaceOrien
                 normal: [0.0, 0.0, 1.0],
                 uv: [
                     texture_offset.0,
-                    texture_offset.1
+                    texture_offset.1 + TEXTURE_UV_STEP.1,
                 ],
             },
             Vertex3d {
@@ -53,7 +53,7 @@ fn face(texture_id: usize, offset: (usize, usize, usize), orientation: FaceOrien
                 normal: [0.0, 0.0, 1.0],
                 uv: [
                     texture_offset.0,
-                    texture_offset.1 + TEXTURE_UV_STEP.1,
+                    texture_offset.1,
                 ],
             },
             Vertex3d {
@@ -65,7 +65,7 @@ fn face(texture_id: usize, offset: (usize, usize, usize), orientation: FaceOrien
                 normal: [0.0, 0.0, 1.0],
                 uv: [
                     texture_offset.0 + TEXTURE_UV_STEP.0,
-                    texture_offset.1 + TEXTURE_UV_STEP.1,
+                    texture_offset.1,
                 ],
             },
         ], [0, 1, 2, 0, 2, 3]),
@@ -79,7 +79,7 @@ fn face(texture_id: usize, offset: (usize, usize, usize), orientation: FaceOrien
                 normal: [0.0, 0.0, -1.0],
                 uv: [
                     texture_offset.0,
-                    texture_offset.1,
+                    texture_offset.1 + TEXTURE_UV_STEP.1,
                 ],
             },
             Vertex3d {
@@ -91,7 +91,7 @@ fn face(texture_id: usize, offset: (usize, usize, usize), orientation: FaceOrien
                 normal: [0.0, 0.0, -1.0],
                 uv: [
                     texture_offset.0 + TEXTURE_UV_STEP.0,
-                    texture_offset.1,
+                    texture_offset.1 + TEXTURE_UV_STEP.1,
                 ],
             },
             Vertex3d {
@@ -103,7 +103,7 @@ fn face(texture_id: usize, offset: (usize, usize, usize), orientation: FaceOrien
                 normal: [0.0, 0.0, -1.0],
                 uv: [
                     texture_offset.0 + TEXTURE_UV_STEP.0,
-                    texture_offset.1 + TEXTURE_UV_STEP.1,
+                    texture_offset.1,
                 ],
             },
             Vertex3d {
@@ -115,7 +115,7 @@ fn face(texture_id: usize, offset: (usize, usize, usize), orientation: FaceOrien
                 normal: [0.0, 0.0, -1.0],
                 uv: [
                     texture_offset.0,
-                    texture_offset.1 + TEXTURE_UV_STEP.1,
+                    texture_offset.1,
                 ],
             },
         ], [0, 2, 1, 0, 3, 2]),
@@ -129,7 +129,7 @@ fn face(texture_id: usize, offset: (usize, usize, usize), orientation: FaceOrien
                 normal: [-1.0, 0.0, 0.0],
                 uv: [
                     texture_offset.0,
-                    texture_offset.1,
+                    texture_offset.1 + TEXTURE_UV_STEP.1,
                 ],
             },
             Vertex3d {
@@ -141,7 +141,7 @@ fn face(texture_id: usize, offset: (usize, usize, usize), orientation: FaceOrien
                 normal: [-1.0, 0.0, 0.0],
                 uv: [
                     texture_offset.0 + TEXTURE_UV_STEP.0,
-                    texture_offset.1,
+                    texture_offset.1 + TEXTURE_UV_STEP.1,
                 ],
             },
             Vertex3d {
@@ -153,7 +153,7 @@ fn face(texture_id: usize, offset: (usize, usize, usize), orientation: FaceOrien
                 normal: [-1.0, 0.0, 0.0],
                 uv: [
                     texture_offset.0 + TEXTURE_UV_STEP.0,
-                    texture_offset.1 + TEXTURE_UV_STEP.1,
+                    texture_offset.1,
                 ],
             },
             Vertex3d {
@@ -165,7 +165,7 @@ fn face(texture_id: usize, offset: (usize, usize, usize), orientation: FaceOrien
                 normal: [-1.0, 0.0, 0.0],
                 uv: [
                     texture_offset.0,
-                    texture_offset.1 + TEXTURE_UV_STEP.1,
+                    texture_offset.1,
                 ],
             },
         ], [0, 2, 1, 0, 3, 2]),
@@ -179,7 +179,7 @@ fn face(texture_id: usize, offset: (usize, usize, usize), orientation: FaceOrien
                 normal: [1.0, 0.0, 0.0],
                 uv: [
                     texture_offset.0,
-                    texture_offset.1,
+                    texture_offset.1 + TEXTURE_UV_STEP.1,
                 ],
             },
             Vertex3d {
@@ -191,7 +191,7 @@ fn face(texture_id: usize, offset: (usize, usize, usize), orientation: FaceOrien
                 normal: [1.0, 0.0, 0.0],
                 uv: [
                     texture_offset.0 + TEXTURE_UV_STEP.0,
-                    texture_offset.1,
+                    texture_offset.1 + TEXTURE_UV_STEP.1,
                 ],
             },
             Vertex3d {
@@ -203,7 +203,7 @@ fn face(texture_id: usize, offset: (usize, usize, usize), orientation: FaceOrien
                 normal: [1.0, 0.0, 0.0],
                 uv: [
                     texture_offset.0 + TEXTURE_UV_STEP.0,
-                    texture_offset.1 + TEXTURE_UV_STEP.1,
+                    texture_offset.1,
                 ],
             },
             Vertex3d {
@@ -215,7 +215,7 @@ fn face(texture_id: usize, offset: (usize, usize, usize), orientation: FaceOrien
                 normal: [1.0, 0.0, 0.0],
                 uv: [
                     texture_offset.0,
-                    texture_offset.1 + TEXTURE_UV_STEP.1,
+                    texture_offset.1,
                 ],
             },
         ], [0, 2, 1, 0, 3, 2]),
@@ -229,7 +229,7 @@ fn face(texture_id: usize, offset: (usize, usize, usize), orientation: FaceOrien
                 normal: [0.0, -1.0, 0.0],
                 uv: [
                     texture_offset.0,
-                    texture_offset.1,
+                    texture_offset.1 + TEXTURE_UV_STEP.1,
                 ],
             },
             Vertex3d {
@@ -241,7 +241,7 @@ fn face(texture_id: usize, offset: (usize, usize, usize), orientation: FaceOrien
                 normal: [0.0, -1.0, 0.0],
                 uv: [
                     texture_offset.0 + TEXTURE_UV_STEP.0,
-                    texture_offset.1,
+                    texture_offset.1 + TEXTURE_UV_STEP.1,
                 ],
             },
             Vertex3d {
@@ -253,7 +253,7 @@ fn face(texture_id: usize, offset: (usize, usize, usize), orientation: FaceOrien
                 normal: [0.0, -1.0, 0.0],
                 uv: [
                     texture_offset.0 + TEXTURE_UV_STEP.0,
-                    texture_offset.1 + TEXTURE_UV_STEP.1,
+                    texture_offset.1,
                 ],
             },
             Vertex3d {
@@ -265,7 +265,7 @@ fn face(texture_id: usize, offset: (usize, usize, usize), orientation: FaceOrien
                 normal: [0.0, -1.0, 0.0],
                 uv: [
                     texture_offset.0,
-                    texture_offset.1 + TEXTURE_UV_STEP.1,
+                    texture_offset.1,
                 ],
             },
         ], [0, 1, 2, 0, 2, 3]),
@@ -279,7 +279,7 @@ fn face(texture_id: usize, offset: (usize, usize, usize), orientation: FaceOrien
                 normal: [0.0, 1.0, 0.0],
                 uv: [
                     texture_offset.0,
-                    texture_offset.1,
+                    texture_offset.1 + TEXTURE_UV_STEP.1,
                 ],
             },
             Vertex3d {
@@ -291,7 +291,7 @@ fn face(texture_id: usize, offset: (usize, usize, usize), orientation: FaceOrien
                 normal: [0.0, 1.0, 0.0],
                 uv: [
                     texture_offset.0 + TEXTURE_UV_STEP.0,
-                    texture_offset.1,
+                    texture_offset.1 + TEXTURE_UV_STEP.1,
                 ],
             },
             Vertex3d {
@@ -303,7 +303,7 @@ fn face(texture_id: usize, offset: (usize, usize, usize), orientation: FaceOrien
                 normal: [0.0, 1.0, 0.0],
                 uv: [
                     texture_offset.0 + TEXTURE_UV_STEP.0,
-                    texture_offset.1 + TEXTURE_UV_STEP.1,
+                    texture_offset.1,
                 ],
             },
             Vertex3d {
@@ -315,7 +315,7 @@ fn face(texture_id: usize, offset: (usize, usize, usize), orientation: FaceOrien
                 normal: [0.0, 1.0, 0.0],
                 uv: [
                     texture_offset.0,
-                    texture_offset.1 + TEXTURE_UV_STEP.1,
+                    texture_offset.1,
                 ],
             },
         ], [0, 2, 1, 0, 3, 2])

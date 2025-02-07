@@ -119,7 +119,7 @@ impl<'w> VoxelGame<'w> {
         let mut rng = rand::rng();
         let mut world = World::new(NoiseGenerator::new(rng.random_range(i32::MIN..i32::MAX)));
 
-        world.dispatch_threads(1);
+        world.dispatch_threads(3);
 
         window.set_cursor_visible(false);
         window.set_cursor_grab(CursorGrabMode::Locked)

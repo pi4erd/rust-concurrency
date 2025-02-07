@@ -97,8 +97,10 @@ impl Generator for NoiseGenerator {
                             continue;
                         }
 
-                        if wy - height_sample as i32 >= -1 {
+                        if wy - height_sample as i32 >= 0 {
                             chunk.set_voxel(coord, Blocks::GRASS_BLOCK.default_state());
+                        } else if wy - height_sample as i32 >= -2 {
+                            chunk.set_voxel(coord, Blocks::DIRT_BLOCK.default_state());
                         } else {
                             chunk.set_voxel(coord, Blocks::STONE.default_state());
                         }
