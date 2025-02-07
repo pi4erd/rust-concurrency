@@ -120,6 +120,57 @@ pub struct BlockOffsetCoord {
     pub z: i32,
 }
 
+impl BlockOffsetCoord {
+    // Optional because can go outside of chunk
+    pub fn left(self) -> Self {
+        Self {
+            x: self.x - 1,
+            y: self.y,
+            z: self.z,
+        }
+    }
+
+    pub fn right(self) -> Self {
+        Self {
+            x: self.x + 1,
+            y: self.y,
+            z: self.z,
+        }
+    }
+
+    pub fn up(self) -> Self {
+        Self {
+            x: self.x,
+            y: self.y + 1,
+            z: self.z,
+        }
+    }
+
+    pub fn down(self) -> Self {
+        Self {
+            x: self.x,
+            y: self.y - 1,
+            z: self.z,
+        }
+    }
+
+    pub fn front(self) -> Self {
+        Self {
+            x: self.x,
+            y: self.y,
+            z: self.z - 1,
+        }
+    }
+
+    pub fn back(self) -> Self {
+        Self {
+            x: self.x,
+            y: self.y,
+            z: self.z + 1,
+        }
+    }
+}
+
 impl Into<ChunkLocalCoord> for BlockOffsetCoord {
     fn into(self) -> ChunkLocalCoord {
         ChunkLocalCoord {
@@ -135,6 +186,69 @@ pub struct ChunkLocalCoord {
     pub x: usize,
     pub y: usize,
     pub z: usize,
+}
+
+impl ChunkLocalCoord {
+    // Optional because can go outside of chunk
+    pub fn left(self) -> Option<Self> {
+        if self.x == 0 { return None }
+
+        return Some(Self {
+            x: self.x - 1,
+            y: self.y,
+            z: self.z,
+        });
+    }
+
+    pub fn right(self) -> Option<Self> {
+        if self.x == CHUNK_SIZE - 1 { return None }
+
+        return Some(Self {
+            x: self.x + 1,
+            y: self.y,
+            z: self.z,
+        });
+    }
+
+    pub fn up(self) -> Option<Self> {
+        if self.y == CHUNK_SIZE - 1 { return None }
+
+        return Some(Self {
+            x: self.x,
+            y: self.y + 1,
+            z: self.z,
+        });
+    }
+
+    pub fn down(self) -> Option<Self> {
+        if self.y == 0 { return None }
+
+        return Some(Self {
+            x: self.x,
+            y: self.y - 1,
+            z: self.z,
+        });
+    }
+
+    pub fn front(self) -> Option<Self> {
+        if self.z == 0 { return None }
+
+        return Some(Self {
+            x: self.x,
+            y: self.y,
+            z: self.z - 1,
+        });
+    }
+
+    pub fn back(self) -> Option<Self> {
+        if self.z == CHUNK_SIZE - 1 { return None }
+
+        return Some(Self {
+            x: self.x,
+            y: self.y,
+            z: self.z + 1,
+        });
+    }
 }
 
 impl From<WorldCoord> for ChunkLocalCoord {
@@ -153,9 +267,9 @@ impl From<WorldCoord> for ChunkLocalCoord {
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Hash)]
 pub struct ChunkCoord {
-    pub x: i32,
-    pub y: i32,
-    pub z: i32,
+    pub x: i16,
+    pub y: i16,
+    pub z: i16,
 }
 
 impl Neg for ChunkCoord {
@@ -255,9 +369,9 @@ impl From<WorldCoord> for ChunkCoord {
         let chunk_z = coord.z / CHUNK_SIZE as i32 - if neg_z { 1 } else { 0 };
 
         Self {
-            x: chunk_x,
-            y: chunk_y,
-            z: chunk_z,
+            x: chunk_x as i16,
+            y: chunk_y as i16,
+            z: chunk_z as i16,
         }
     }
 }
@@ -265,9 +379,9 @@ impl From<WorldCoord> for ChunkCoord {
 impl Into<WorldCoord> for ChunkCoord {
     fn into(self) -> WorldCoord {
         WorldCoord {
-            x: self.x * CHUNK_SIZE as i32,
-            y: self.y * CHUNK_SIZE as i32,
-            z: self.z * CHUNK_SIZE as i32,
+            x: self.x as i32 * CHUNK_SIZE as i32,
+            y: self.y as i32 * CHUNK_SIZE as i32,
+            z: self.z as i32 * CHUNK_SIZE as i32,
         }
     }
 }

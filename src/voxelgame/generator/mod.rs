@@ -3,9 +3,7 @@ pub mod voxel;
 pub mod meshgen;
 
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
-    sync::{mpsc::{self, Receiver, Sender}, Arc, Mutex},
-    thread::{self, JoinHandle}
+    collections::{HashMap, HashSet, VecDeque}, hash::Hasher, sync::{mpsc::{self, Receiver, Sender}, Arc, Mutex}, thread::{self, JoinHandle}
 };
 
 use cgmath::{EuclideanSpace, MetricSpace};
@@ -90,10 +88,10 @@ impl Generator for NoiseGenerator {
                         let caviness = self.sampler.sample(
                             chunk.coord,
                             x as f32, y as f32, z as f32,
-                            SCALE * 2.0
-                        ) * 0.5 + 0.5 + wy as f32 * 0.1;
+                            SCALE * 0.3
+                        ) * 0.5 + 0.5;
     
-                        if cave_sample * (1.0 - caviness) < -0.2 {
+                        if cave_sample * (1.0 - caviness) < -0.23 {
                             continue;
                         }
 
@@ -185,6 +183,30 @@ impl<T> World<T> {
                 Blocks::AIR.default_state(),
             );
 
+            if let None = local_coord.left() {
+                self.meshgen_queue.lock().unwrap().push_front(chunk.coord.left());
+            }
+
+            if let None = local_coord.right() {
+                self.meshgen_queue.lock().unwrap().push_front(chunk.coord.right());
+            }
+
+            if let None = local_coord.up() {
+                self.meshgen_queue.lock().unwrap().push_front(chunk.coord.up());
+            }
+
+            if let None = local_coord.down() {
+                self.meshgen_queue.lock().unwrap().push_front(chunk.coord.down());
+            }
+
+            if let None = local_coord.front() {
+                self.meshgen_queue.lock().unwrap().push_front(chunk.coord.front());
+            }
+
+            if let None = local_coord.back() {
+                self.meshgen_queue.lock().unwrap().push_front(chunk.coord.back());
+            }
+
             self.meshgen_queue.lock().unwrap().push_front(chunk.coord);
 
             log::info!("Broken block at {:?}", position);
@@ -198,31 +220,33 @@ impl<T> World<T> {
         let world_coord: WorldCoord = camera.eye.to_vec().into();
         let center = ChunkCoord::from(world_coord);
         
-        let mut queue = self.chunk_gen_queue.lock().unwrap();
-        let mut set = self.sent_chunks.lock().unwrap();
         for i in -distance..=distance {
             for j in -distance..=distance {
                 for k in -distance..=distance {
                     let chunk = center + ChunkCoord {
-                        x: k,
-                        y: -i,
-                        z: j,
+                        x: k as i16,
+                        y: -i as i16,
+                        z: j as i16,
                     };
                     
-                    if self.chunks.contains_key(&chunk) || set.contains(&chunk) {
-                        continue;
-                    }
-
-                    if queue.len() >= Self::MAX_QUEUE_SIZE {
-                        log::warn!("Queue limit reached!");
-                        queue.clear();
-                    }
-
-                    set.insert(chunk);
-                    queue.push_back(chunk);
+                    self.enqueue_chunk(chunk);
                 }
             }
         }
+    }
+
+    pub fn enqueue_chunk(&mut self, chunk_coord: ChunkCoord) {
+        if !self.sent_chunks.lock().unwrap().insert(chunk_coord) {
+            return;
+        }
+
+        let mut queue = self.chunk_gen_queue.lock().unwrap();
+        if queue.len() >= Self::MAX_QUEUE_SIZE {
+            log::warn!("Queue limit reached!");
+            queue.clear();
+        }
+
+        queue.push_back(chunk_coord);
     }
 
     pub fn dispatch_threads(&mut self, worldgen: usize) where T: 'static + Generator {

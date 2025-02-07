@@ -485,7 +485,7 @@ impl<'w> VoxelGame<'w> {
         self.world.receive_chunk();
 
         let start = Instant::now();
-        for _ in 0..32 {
+        for _ in 0..64 {
             let elapsed = (Instant::now() - start).as_secs_f64();
 
             if elapsed >= 0.01 {

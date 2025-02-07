@@ -1,6 +1,6 @@
 use crate::voxelgame::{draw::Model, mesh::{Mesh, Vertex3d}};
 
-use super::{chunk::{BlockOffsetCoord, Chunk, WorldCoord, CHUNK_SIZE}, voxel::Blocks, World};
+use super::{chunk::{BlockOffsetCoord, Chunk, WorldCoord, CHUNK_SIZE}, voxel::{Blocks, Voxel}, World};
 
 pub const TEXTURE_COUNT: (usize, usize) = (32, 32);
 pub const TEXTURE_UV_STEP: (f32, f32) = (1.0 / TEXTURE_COUNT.0 as f32, 1.0 / TEXTURE_COUNT.1 as f32);
@@ -322,6 +322,21 @@ fn face(texture_id: usize, offset: (usize, usize, usize), orientation: FaceOrien
     }
 }
 
+#[inline]
+fn get_voxel_wrapper<T>(coord: BlockOffsetCoord, chunk: &Chunk, world: &World<T>) -> Option<Voxel> {
+    if coord.x < 0 || coord.x >= CHUNK_SIZE as i32 ||
+        coord.y < 0 || coord.y >= CHUNK_SIZE as i32 ||
+        coord.z < 0 || coord.z >= CHUNK_SIZE as i32
+    {
+        world.get_voxel(WorldCoord::from_chunk_and_local(
+            chunk.coord,
+            coord
+        ))
+    } else {
+        chunk.get_voxel(coord.into())
+    }
+}
+
 pub fn generate_model<T>(
     device: &wgpu::Device,
     bg_layout: &wgpu::BindGroupLayout,
@@ -334,13 +349,8 @@ pub fn generate_model<T>(
     for x in 0..CHUNK_SIZE as i32 {
         for y in 0..CHUNK_SIZE as i32 {
             for z in 0..CHUNK_SIZE as i32 {
-                let sampled_coord = WorldCoord::from_chunk_and_local(
-                    chunk.coord,
-                    BlockOffsetCoord {
-                        x, y, z
-                    }
-                );
-                let current_voxel = world.get_voxel(sampled_coord).unwrap();
+                let coord = BlockOffsetCoord { x, y, z };
+                let current_voxel = get_voxel_wrapper(coord, chunk, world).unwrap();
                 let current_block_info = Blocks::BLOCKS[current_voxel.id as usize];
 
                 if current_block_info.transparent {
@@ -348,7 +358,7 @@ pub fn generate_model<T>(
                 }
 
                 // Left
-                if let Some(voxel) = world.get_voxel(sampled_coord.left()) {
+                if let Some(voxel) = get_voxel_wrapper(coord.left(), chunk, world) {
                     let block_info = Blocks::BLOCKS[voxel.id as usize];
                     
                     if block_info.transparent {
@@ -371,7 +381,7 @@ pub fn generate_model<T>(
                 }
 
                 // Right
-                if let Some(voxel) = world.get_voxel(sampled_coord.right()) {
+                if let Some(voxel) = get_voxel_wrapper(coord.right(), chunk, world) {
                     let block_info = Blocks::BLOCKS[voxel.id as usize];
                     
                     if block_info.transparent {
@@ -394,7 +404,7 @@ pub fn generate_model<T>(
                 }
 
                 // Top
-                if let Some(voxel) = world.get_voxel(sampled_coord.up()) {
+                if let Some(voxel) = get_voxel_wrapper(coord.up(), chunk, world) {
                     let block_info = Blocks::BLOCKS[voxel.id as usize];
                     
                     if block_info.transparent {
@@ -417,7 +427,7 @@ pub fn generate_model<T>(
                 }
                 
                 // Bottom
-                if let Some(voxel) = world.get_voxel(sampled_coord.down()) {
+                if let Some(voxel) = get_voxel_wrapper(coord.down(), chunk, world) {
                     let block_info = Blocks::BLOCKS[voxel.id as usize];
                     
                     if block_info.transparent {
@@ -440,7 +450,7 @@ pub fn generate_model<T>(
                 }
 
                 // Front
-                if let Some(voxel) = world.get_voxel(sampled_coord.front()) {
+                if let Some(voxel) = get_voxel_wrapper(coord.front(), chunk, world) {
                     let block_info = Blocks::BLOCKS[voxel.id as usize];
                     
                     if block_info.transparent {
@@ -463,7 +473,7 @@ pub fn generate_model<T>(
                 }
 
                 // Back
-                if let Some(voxel) = world.get_voxel(sampled_coord.back()) {
+                if let Some(voxel) = get_voxel_wrapper(coord.back(), chunk, world) {
                     let block_info = Blocks::BLOCKS[voxel.id as usize];
                     
                     if block_info.transparent {
