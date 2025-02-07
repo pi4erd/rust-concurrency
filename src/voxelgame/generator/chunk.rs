@@ -106,9 +106,9 @@ impl Into<cgmath::Vector3<f32>> for WorldCoord {
 impl From<cgmath::Vector3<f32>> for WorldCoord {
     fn from(value: cgmath::Vector3<f32>) -> Self {
         Self {
-            x: value.x as i32,
-            y: value.y as i32,
-            z: value.z as i32,
+            x: value.x.floor() as i32,
+            y: value.y.floor() as i32,
+            z: value.z.floor() as i32,
         }
     }
 }
