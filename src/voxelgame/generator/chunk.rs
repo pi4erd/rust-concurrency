@@ -2,7 +2,7 @@ use std::{fmt::Display, ops::{Add, Neg}};
 
 use super::voxel::{Blocks, Voxel};
 
-pub const CHUNK_SIZE: usize = 32; // NOTE: size > 20 crashes debug build
+pub const CHUNK_SIZE: usize = 20; // NOTE: size > 20 crashes debug build
 const CHUNK_SIZE_ITEMS: usize = CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Hash)]
@@ -46,7 +46,6 @@ impl ChunkCoord {
     }
 
     pub fn from_world(coord: cgmath::Vector3<f32>) -> Self {
-        // FIXME: It's off by 1 sometimes and I can't be bothered to fix it now
         let x = coord.x as i32;
         let y = coord.y as i32;
         let z = coord.z as i32;

@@ -11,7 +11,7 @@ use camera::{Camera, CameraController};
 use cgmath::EuclideanSpace;
 use debug::{DebugDrawer, DebugModelInstance, DebugVertex};
 use draw::Drawable;
-use generator::{NoiseGenerator, Ray, World};
+use generator::{chunk::{ChunkCoord, CHUNK_SIZE}, NoiseGenerator, Ray, World};
 use mesh::{Instance, Vertex, Vertex3d};
 use pollster::FutureExt;
 use rand::Rng;
@@ -384,7 +384,10 @@ impl<'w> VoxelGame<'w> {
                 targets: &[
                     Some(wgpu::ColorTargetState {
                         format: surface_config.format,
-                        blend: None,
+                        blend: Some(wgpu::BlendState {
+                            color: wgpu::BlendComponent::OVER,
+                            alpha: wgpu::BlendComponent::OVER,
+                        }),
                         write_mask: wgpu::ColorWrites::ALL,
                     })
                 ]
@@ -487,25 +490,24 @@ impl<'w> VoxelGame<'w> {
         self.update_uniform_buffers();
 
         self.debug.new_frame();
-        self.world.append_debug(
-            &mut self.debug,
-        );
-
+        // self.world.append_debug(
+        //     &mut self.debug,
+        // );
+        
         let hit = self.world.ray_hit(Ray {
             origin:self.camera.eye,
-            direction: self.camera.direction
-        });
+            direction: -self.camera.direction // TODO: Figure out why negative
+        }, None);
 
         if let Some((position, _)) = hit {
-            log::debug!("Hit at {:?}", position);
             self.debug.append_mesh(
                 debug::ModelName::Cube,
                 cgmath::Vector3::new(
                     position.x as f32,
                     position.y as f32,
                     position.z as f32,
-                ),
-                cgmath::Vector3::new(1.0, 1.0, 1.0),
+                ) - cgmath::Vector3::new(0.05, 0.05, 0.05),
+                cgmath::Vector3::new(1.1, 1.1, 1.1),
                 cgmath::Vector4::new(1.0, 0.0, 0.0, 1.0),
             );
         }
@@ -668,6 +670,36 @@ impl<'w> Game for VoxelGame<'w> {
             }
             WindowEvent::Resized(new_size) => {
                 self.resize(new_size);
+            }
+            WindowEvent::MouseInput { state, button, .. } => {
+                if state.is_pressed() {
+                    match button {
+                        winit::event::MouseButton::Left => {
+                            let hit = self.world.ray_hit(Ray {
+                                origin:self.camera.eye,
+                                direction: -self.camera.direction,
+                            }, None);
+
+                            if let Some((world_coord, _)) = hit {
+                                let chunk_coord = ChunkCoord::from_world(cgmath::Vector3::new(
+                                    world_coord.x as f32,
+                                    world_coord.y as f32,
+                                    world_coord.z as f32,
+                                ));
+                                let local_coord = cgmath::Vector3::new(
+                                    world_coord.x % CHUNK_SIZE as i32,
+                                    world_coord.y % CHUNK_SIZE as i32,
+                                    world_coord.z % CHUNK_SIZE as i32,
+                                );
+                                self.world.break_block(
+                                    chunk_coord,
+                                    (local_coord.x, local_coord.y, local_coord.z)
+                                );
+                            }
+                        }
+                        _ => {}
+                    }
+                }
             }
             WindowEvent::KeyboardInput { event, .. } => {
                 if event.state.is_pressed() {

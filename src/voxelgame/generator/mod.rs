@@ -181,6 +181,37 @@ impl<T> World<T> {
         )
     }
 
+    pub fn break_block(&mut self, mut chunk: ChunkCoord, mut position: (i32, i32, i32)) {
+        if position.0 < 0 || position.0 >= CHUNK_SIZE as i32 {
+            chunk.x += if position.0 < 0 { -1 } else { 1 };
+            position.0 += if position.0 < 0 { CHUNK_SIZE as i32 } else { -(CHUNK_SIZE as i32) };
+        }
+        if position.1 < 0 || position.1 >= CHUNK_SIZE as i32 {
+            chunk.y += if position.1 < 0 { -1 } else { 1 };
+            position.1 += if position.1 < 0 { CHUNK_SIZE as i32 } else { -(CHUNK_SIZE as i32) };
+        }
+        if position.2 < 0 || position.2 >= CHUNK_SIZE as i32 {
+            chunk.z += if position.2 < 0 { -1 } else { 1 };
+            position.2 += if position.2 < 0 { CHUNK_SIZE as i32 } else { -(CHUNK_SIZE as i32) };
+        }
+
+        let chunk = self.chunks.get_mut(&chunk);
+
+        if let Some(chunk) = chunk {
+            chunk.set_voxel(
+                position.0 as usize,
+                position.1 as usize,
+                position.2 as usize,
+                Blocks::AIR.default_state(),
+            );
+
+            self.meshgen_queue.lock().unwrap().push_front(chunk.coord);
+
+            log::info!("Broken block at {:?}", position);
+        }
+    }
+
+
     pub fn enqueue_chunks_around(&mut self, camera: &Camera, distance: usize) {
         // TODO: Improve this function for more dynamic generation
         let distance = distance as i32;
@@ -252,24 +283,42 @@ impl<T> World<T> {
         }
     }
 
-    pub fn ray_hit(&self, ray: Ray) -> Option<(cgmath::Vector3<i32>, Voxel)> {
+    pub fn ray_hit(&self, ray: Ray, mut debug: Option<&mut DebugDrawer>) -> Option<(cgmath::Vector3<i32>, Voxel)> {
         const MAX_DISTANCE: f32 = 32.0;
-        const STEP_SIZE: f32 = 0.5;
-        const STEP_COUNT: usize = (MAX_DISTANCE / STEP_SIZE) as usize;
 
-        for step in 0..STEP_COUNT {
-            let distance = STEP_SIZE * step as f32;
+        let mut distance = 0.0;
+
+        while distance < MAX_DISTANCE {
             let point = ray.origin + ray.direction * distance;
 
             let vec = point.to_vec();
             let chunk_coord = ChunkCoord::from_world(vec);
             let local_coord = vec - chunk_coord.to_world();
 
-            let global_block_coord = cgmath::Vector3::new(
+            let mut global_block_coord = cgmath::Vector3::new(
                 vec.x as i32,
                 vec.y as i32,
                 vec.z as i32,
             );
+
+            if chunk_coord.x < 0 {
+                global_block_coord.x -= 1;
+            }
+            if chunk_coord.y < 0 {
+                global_block_coord.y -= 1;
+            }
+            if chunk_coord.z < 0 {
+                global_block_coord.z -= 1;
+            }
+
+            if let Some(debug) = debug.as_mut() {
+                debug.append_mesh(
+                    ModelName::Cube,
+                    vec - cgmath::Vector3::new(0.05, 0.05, 0.05),
+                    cgmath::Vector3::new(0.1, 0.1, 0.1),
+                    cgmath::Vector4::new(1.0, 0.0, 1.0, 0.3),
+                );
+            }
 
             let result = self.get_voxel(
                 chunk_coord,
@@ -279,6 +328,9 @@ impl<T> World<T> {
                     local_coord.z as i32,
                 )
             );
+
+            distance += 0.1;
+
             if let Some(voxel) = result {
                 if !Blocks::BLOCKS[voxel.id as usize].solid {
                     continue;
@@ -325,7 +377,7 @@ impl<T> World<T> {
             );
 
             if let Some(model) = model {
-                self.models.insert(
+                _ = self.models.insert(
                     coord,
                     model
                 );
