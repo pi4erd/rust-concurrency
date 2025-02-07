@@ -479,18 +479,15 @@ impl<'w> VoxelGame<'w> {
         self.camera_controller.update(&mut self.camera, delta);
 
         if self.generate {
-            self.world.enqueue_chunks_around(&self.camera, 10);
+            self.world.enqueue_chunks_around(&self.camera, 8, 10);
+        }
+
+        for _ in 0..64 {
+            self.world.receive_chunk();
         }
 
         let start = Instant::now();
-        loop {
-            let elapsed = (Instant::now() - start).as_secs_f64();
-
-            if elapsed >= 0.01 {
-                break;
-            }
-
-            self.world.receive_chunk();
+        for _ in 0..64 {
             self.world.dequeue_meshgen(&self.device, &self.queue, &self.bind_layouts["model"]);
         }
 

@@ -213,19 +213,19 @@ impl<T> World<T> {
         }
     }
 
-    pub fn enqueue_chunks_around(&mut self, camera: &Camera, distance: usize) {
-        // TODO: Improve this function for more dynamic generation
+    pub fn enqueue_chunks_around(&mut self, camera: &Camera, height: usize, distance: usize) {
+        let height = height as i32;
         let distance = distance as i32;
 
         let world_coord: WorldCoord = camera.eye.to_vec().into();
         let center = ChunkCoord::from(world_coord);
         
-        for i in -distance..=distance {
+        for i in -(height / 2)..=height / 2 {
             for j in -distance..=distance {
                 for k in -distance..=distance {
                     let chunk = center + ChunkCoord {
                         x: k as i16,
-                        y: -i as i16,
+                        y: i as i16,
                         z: j as i16,
                     };
                     
