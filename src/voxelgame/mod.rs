@@ -48,6 +48,10 @@ pub struct VoxelGame<'w> {
     camera: Camera,
     camera_controller: CameraController,
 
+    egui_context: egui::Context,
+    egui_state: egui_winit::State,
+    egui_renderer: egui_wgpu::Renderer,
+
     generate: bool,
     draw_debug: bool,
 }
@@ -56,7 +60,7 @@ impl<'w> VoxelGame<'w> {
     pub async fn new(window: Arc<Window>) -> Self {
         let size = window.inner_size();
 
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends: wgpu::Backends::VULKAN | wgpu::Backends::DX12 |
                 wgpu::Backends::METAL,
             flags: wgpu::InstanceFlags::default(),
@@ -127,6 +131,24 @@ impl<'w> VoxelGame<'w> {
                 |_| window.set_cursor_grab(CursorGrabMode::Confined)
                     .expect("No cursor confine/lock available.")
             );
+        
+        // Setup EGUI
+
+        let egui_context = egui::Context::default();
+        let egui_state = egui_winit::State::new(
+            egui_context.clone(),
+            egui::ViewportId(egui::Id::new("viewport")),
+            &window,
+            None,
+            None,
+            None,
+        );
+        let egui_renderer = egui_wgpu::Renderer::new(
+            &device,
+            surface_config.format,
+            Some(Texture2d::DEPTH_FORMAT),
+            1, false,
+        );
 
         Self {
             window,
@@ -152,6 +174,10 @@ impl<'w> VoxelGame<'w> {
             textures,
             camera,
             camera_controller,
+
+            egui_state,
+            egui_context,
+            egui_renderer,
 
             generate: true,
             draw_debug: false,
@@ -479,14 +505,13 @@ impl<'w> VoxelGame<'w> {
         self.camera_controller.update(&mut self.camera, delta);
 
         if self.generate {
-            self.world.enqueue_chunks_around(&self.camera, 8, 10);
+            self.world.enqueue_chunks_around(&self.camera, 7, 7);
         }
 
         for _ in 0..64 {
             self.world.receive_chunk();
         }
 
-        let start = Instant::now();
         for _ in 0..64 {
             self.world.dequeue_meshgen(&self.device, &self.queue, &self.bind_layouts["model"]);
         }
@@ -581,7 +606,7 @@ impl<'w> VoxelGame<'w> {
             opaque_pass.set_bind_group(1, &self.bind_groups["terrain_texture"], &[]);
             opaque_pass.set_bind_group(2, &self.bind_groups["camera"], &[]);
 
-            self.world.draw_distance(&mut opaque_pass, self.camera.eye.to_vec(), 32);
+            self.world.draw_distance(&mut opaque_pass, self.camera.eye.to_vec(), 16);
         }
 
         if self.draw_debug {
@@ -616,7 +641,81 @@ impl<'w> VoxelGame<'w> {
             self.debug.draw(&mut debug_pass);
         }
 
-        self.queue.submit(std::iter::once(encoder.finish()));
+        let mut ui_encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        {
+            let mut ui_pass = ui_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("ui_pass"),
+                color_attachments: &[
+                    Some(wgpu::RenderPassColorAttachment {
+                        view: &view,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: wgpu::StoreOp::Store,
+                        }
+                    })
+                ],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &self.depth_texture.view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    }),
+                    stencil_ops: None,
+                }),
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            }).forget_lifetime(); // NOTE: Reaaally hope this doesn't leak
+
+            let input = self.egui_state.egui_input();
+
+            let full_output = self.egui_context.run(input.clone(), |ctx| {
+                egui::Window::new("Stats").show(&ctx, |ui| {
+                    // Draw UI
+                    ui.label("Hello, world!");
+                    if ui.button("Press this").clicked() {
+                        log::info!("Button pressed")
+                    }
+                });
+            });
+
+            self.egui_state.handle_platform_output(&self.window, full_output.platform_output);
+
+            let paint_jobs = self.egui_context.tessellate(
+                full_output.shapes,
+                full_output.pixels_per_point
+            );
+
+            for (id, image_delta) in &full_output.textures_delta.set {
+                self.egui_renderer.update_texture(
+                    &self.device,
+                    &self.queue,
+                    *id,
+                    image_delta,
+                );
+            }
+
+            let screen_descriptor = egui_wgpu::ScreenDescriptor {
+                size_in_pixels: [self.surface_config.width, self.surface_config.height],
+                pixels_per_point: self.window.scale_factor() as f32,
+            };
+
+            _ = self.egui_renderer.update_buffers(
+                &self.device,
+                &self.queue,
+                &mut ui_encoder,
+                &paint_jobs,
+                &screen_descriptor
+            );
+            
+            self.egui_renderer.render(
+                &mut ui_pass,
+                &paint_jobs,
+                &screen_descriptor,
+            );
+        }
+
+        self.queue.submit([encoder.finish(), ui_encoder.finish()]);
 
         self.window.pre_present_notify();
         image.present();
@@ -669,6 +768,9 @@ impl<'w> Game for VoxelGame<'w> {
                     Err(wgpu::SurfaceError::OutOfMemory) => {
                         log::error!("Surface out of memory!");
                         event_loop.exit();
+                    }
+                    Err(wgpu::SurfaceError::Other) => {
+                        log::warn!("Other surface error.");
                     }
                 }
             }
