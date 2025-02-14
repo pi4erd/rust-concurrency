@@ -1,5 +1,4 @@
 #[cfg(test)]
-
 #[allow(unused_imports)]
 use super::generator::chunk::{ChunkCoord, ChunkLocalCoord, WorldCoord, CHUNK_SIZE};
 
@@ -24,8 +23,8 @@ fn coord_test() {
                 y: CHUNK_SIZE as i32,
                 z: CHUNK_SIZE as i32,
             },
-            ChunkCoord { x: 1, y: 1, z: 1},
-            ChunkLocalCoord { x: 0, y: 0, z: 0},
+            ChunkCoord { x: 1, y: 1, z: 1 },
+            ChunkLocalCoord { x: 0, y: 0, z: 0 },
         ),
         (
             WorldCoord {
@@ -33,8 +32,12 @@ fn coord_test() {
                 y: CHUNK_SIZE as i32,
                 z: CHUNK_SIZE as i32,
             },
-            ChunkCoord { x: -1, y: 1, z: 1},
-            ChunkLocalCoord { x: CHUNK_SIZE - 1, y: 0, z: 0},
+            ChunkCoord { x: -1, y: 1, z: 1 },
+            ChunkLocalCoord {
+                x: CHUNK_SIZE - 1,
+                y: 0,
+                z: 0,
+            },
         ),
         (
             WorldCoord {
@@ -42,8 +45,8 @@ fn coord_test() {
                 y: CHUNK_SIZE as i32,
                 z: CHUNK_SIZE as i32,
             },
-            ChunkCoord { x: -1, y: 1, z: 1},
-            ChunkLocalCoord { x: 0, y: 0, z: 0},
+            ChunkCoord { x: -1, y: 1, z: 1 },
+            ChunkLocalCoord { x: 0, y: 0, z: 0 },
         ),
     ];
 

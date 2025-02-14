@@ -46,7 +46,12 @@ impl Camera {
     }
 
     pub fn projection(&self, aspect: f32) -> Matrix4<f32> {
-        cgmath::perspective(cgmath::Rad(std::f32::consts::FRAC_PI_2), aspect, self.near, self.far)
+        cgmath::perspective(
+            cgmath::Rad(std::f32::consts::FRAC_PI_2),
+            aspect,
+            self.near,
+            self.far,
+        )
     }
 
     pub fn uniform(&self) -> CameraUniform {
@@ -135,14 +140,12 @@ impl CameraController {
 
                 self.speed *= 1.0 + self.arrowkey_axis.get() * 0.2;
             }
-            WindowEvent::MouseWheel { delta, .. } => {
-                match delta {
-                    winit::event::MouseScrollDelta::LineDelta(_, y) => {
-                        self.speed *= 1.0 + y * 0.1;
-                    }
-                    _ => {}
+            WindowEvent::MouseWheel { delta, .. } => match delta {
+                winit::event::MouseScrollDelta::LineDelta(_, y) => {
+                    self.speed *= 1.0 + y * 0.1;
                 }
-            }
+                _ => {}
+            },
             _ => {}
         }
     }
@@ -152,40 +155,38 @@ impl CameraController {
             DeviceEvent::MouseMotion { delta } => {
                 self.camera_motion.0 -= delta.0 as f32 * self.sensitivity;
                 self.camera_motion.1 -= delta.1 as f32 * self.sensitivity;
-                self.camera_motion.1 = self.camera_motion.1.clamp(-FRAC_PI_2 + 0.001, FRAC_PI_2 - 0.001);
+                self.camera_motion.1 = self
+                    .camera_motion
+                    .1
+                    .clamp(-FRAC_PI_2 + 0.001, FRAC_PI_2 - 0.001);
             }
             _ => {}
         }
     }
 
     pub fn update(&mut self, camera: &mut Camera, delta: f32) {
-        let roty = Matrix3::from_axis_angle(
-            Vector3::unit_y(),
-            cgmath::Rad(self.camera_motion.0)
-        );
-        let rotx = Matrix3::from_axis_angle(
-            Vector3::unit_x(),
-            cgmath::Rad(self.camera_motion.1)
-        );
+        let roty = Matrix3::from_axis_angle(Vector3::unit_y(), cgmath::Rad(self.camera_motion.0));
+        let rotx = Matrix3::from_axis_angle(Vector3::unit_x(), cgmath::Rad(self.camera_motion.1));
 
         camera.direction = roty * rotx * Vector3::unit_z();
 
-        let movement = (
-                self.horizontal.get() * camera.right()
-                + self.vertical.get() * camera.direction
-                + self.updown_axis.get() * camera.up()
-            ).normalize()
+        let movement = (self.horizontal.get() * camera.right()
+            + self.vertical.get() * camera.direction
+            + self.updown_axis.get() * camera.up())
+        .normalize()
             * self.speed
             * delta;
-        
+
         // camera.up = Matrix3::from_axis_angle(
         //     camera.direction,
         //     cgmath::Rad(-self.qe_axis.get() * delta)
         // ) * camera.up;
 
-        if self.horizontal.get() != 0.0 || self.vertical.get() != 0.0 ||
-            self.updown_axis.get() != 0.0 {
-                camera.eye += movement;
+        if self.horizontal.get() != 0.0
+            || self.vertical.get() != 0.0
+            || self.updown_axis.get() != 0.0
+        {
+            camera.eye += movement;
         }
     }
 }

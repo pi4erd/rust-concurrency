@@ -1,4 +1,7 @@
-use std::{fmt::Display, ops::{Add, Neg, Sub}};
+use std::{
+    fmt::Display,
+    ops::{Add, Neg, Sub},
+};
 
 use super::voxel::{Blocks, Voxel};
 
@@ -95,11 +98,7 @@ impl Sub<WorldCoord> for WorldCoord {
 
 impl Into<cgmath::Vector3<f32>> for WorldCoord {
     fn into(self) -> cgmath::Vector3<f32> {
-        cgmath::Vector3::new(
-            self.x as f32,
-            self.y as f32,
-            self.z as f32,
-        )
+        cgmath::Vector3::new(self.x as f32, self.y as f32, self.z as f32)
     }
 }
 
@@ -191,7 +190,9 @@ pub struct ChunkLocalCoord {
 impl ChunkLocalCoord {
     // Optional because can go outside of chunk
     pub fn left(self) -> Option<Self> {
-        if self.x == 0 { return None }
+        if self.x == 0 {
+            return None;
+        }
 
         return Some(Self {
             x: self.x - 1,
@@ -201,7 +202,9 @@ impl ChunkLocalCoord {
     }
 
     pub fn right(self) -> Option<Self> {
-        if self.x == CHUNK_SIZE - 1 { return None }
+        if self.x == CHUNK_SIZE - 1 {
+            return None;
+        }
 
         return Some(Self {
             x: self.x + 1,
@@ -211,7 +214,9 @@ impl ChunkLocalCoord {
     }
 
     pub fn up(self) -> Option<Self> {
-        if self.y == CHUNK_SIZE - 1 { return None }
+        if self.y == CHUNK_SIZE - 1 {
+            return None;
+        }
 
         return Some(Self {
             x: self.x,
@@ -221,7 +226,9 @@ impl ChunkLocalCoord {
     }
 
     pub fn down(self) -> Option<Self> {
-        if self.y == 0 { return None }
+        if self.y == 0 {
+            return None;
+        }
 
         return Some(Self {
             x: self.x,
@@ -231,7 +238,9 @@ impl ChunkLocalCoord {
     }
 
     pub fn front(self) -> Option<Self> {
-        if self.z == 0 { return None }
+        if self.z == 0 {
+            return None;
+        }
 
         return Some(Self {
             x: self.x,
@@ -241,7 +250,9 @@ impl ChunkLocalCoord {
     }
 
     pub fn back(self) -> Option<Self> {
-        if self.z == CHUNK_SIZE - 1 { return None }
+        if self.z == CHUNK_SIZE - 1 {
+            return None;
+        }
 
         return Some(Self {
             x: self.x,
@@ -260,7 +271,7 @@ impl From<WorldCoord> for ChunkLocalCoord {
         let offset = value - chunk_world_coord;
 
         assert!(offset.x >= 0 && offset.y >= 0 && offset.z >= 0);
-        
+
         offset.into()
     }
 }
@@ -421,7 +432,7 @@ impl Chunk {
 
     pub fn get_voxel(&self, coord: ChunkLocalCoord) -> Option<Voxel> {
         if coord.x >= CHUNK_SIZE || coord.y >= CHUNK_SIZE || coord.z >= CHUNK_SIZE {
-            return None
+            return None;
         }
 
         self.chunk_data.get(Self::translate_index(coord)).cloned()

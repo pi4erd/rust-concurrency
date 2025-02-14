@@ -69,7 +69,11 @@ impl Mesh {
             usage: wgpu::BufferUsages::INDEX,
         });
 
-        log::debug!("Created model with {} vertices and {} triangles.", vertices.len(), indices.len());
+        log::debug!(
+            "Created model with {} vertices and {} triangles.",
+            vertices.len(),
+            indices.len()
+        );
 
         Self {
             vertex_buffer,
@@ -78,11 +82,16 @@ impl Mesh {
         }
     }
 
-    pub fn draw_instanced(&self, render_pass: &mut wgpu::RenderPass, instance_buffer: &wgpu::Buffer, instances: Range<u32>) {
+    pub fn draw_instanced(
+        &self,
+        render_pass: &mut wgpu::RenderPass,
+        instance_buffer: &wgpu::Buffer,
+        instances: Range<u32>,
+    ) {
         render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         render_pass.set_vertex_buffer(1, instance_buffer.slice(..));
         render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-        
+
         render_pass.draw_indexed(0..self.element_count as u32, 0, instances);
     }
 }

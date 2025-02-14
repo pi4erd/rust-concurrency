@@ -42,18 +42,19 @@ impl Texture2d {
     ) -> TextureCreateResult<Self> {
         let image = image::ImageReader::open(filename)
             .map_err(|e| TextureCreateError::new(format!("Failed to open file: {e}")))?
-            .decode().map_err(|e| TextureCreateError::new(format!("Failed to decode image: {e}")))?;
+            .decode()
+            .map_err(|e| TextureCreateError::new(format!("Failed to decode image: {e}")))?;
 
         // NOTE: Assume texture format RGBA8Srgb
         let format = wgpu::TextureFormat::Rgba8UnormSrgb;
-        
+
         Ok(Self::from_bytes(
             image.to_rgba8().as_bytes(),
             device,
             queue,
             image.dimensions(),
             format,
-            label
+            label,
         ))
     }
 
@@ -63,19 +64,20 @@ impl Texture2d {
         queue: &wgpu::Queue,
         label: Option<&str>,
     ) -> TextureCreateResult<Self> {
-        let image = image::load_from_memory(bytes)
-            .map_err(|e| TextureCreateError::new(format!("Failed to load image from memory: {e}")))?;
+        let image = image::load_from_memory(bytes).map_err(|e| {
+            TextureCreateError::new(format!("Failed to load image from memory: {e}"))
+        })?;
 
         // NOTE: Assume texture format RGBA8Srgb
         let format = wgpu::TextureFormat::Rgba8UnormSrgb;
-        
+
         Ok(Self::from_bytes(
             image.to_rgba8().as_bytes(),
             device,
             queue,
             image.dimensions(),
             format,
-            label
+            label,
         ))
     }
 
@@ -103,7 +105,7 @@ impl Texture2d {
                 lod_max_clamp: 100.0,
                 ..Default::default()
             },
-            label
+            label,
         );
 
         queue.write_texture(

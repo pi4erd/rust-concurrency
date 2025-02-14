@@ -27,17 +27,15 @@ impl<T> Model<T> {
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: None,
             layout: bg_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: model_buffer.as_entire_binding(),
-                }
-            ]
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: model_buffer.as_entire_binding(),
+            }],
         });
 
         Self {
             data,
-            position: cgmath::Vector3::new(0.0, 0.0,0.0),
+            position: cgmath::Vector3::new(0.0, 0.0, 0.0),
             rotation: cgmath::Quaternion::zero(),
             scale: cgmath::Vector3::new(1.0, 1.0, 1.0),
             model_buffer,
@@ -54,8 +52,8 @@ impl<T> Model<T> {
     }
 
     pub fn uniform(&self) -> ModelUniform {
-        let model = cgmath::Matrix4::from_translation(self.position) * 
-            cgmath::Matrix4::from_axis_angle(self.rotation.v, cgmath::Rad(self.rotation.s))
+        let model = cgmath::Matrix4::from_translation(self.position)
+            * cgmath::Matrix4::from_axis_angle(self.rotation.v, cgmath::Rad(self.rotation.s))
             * cgmath::Matrix4::from_nonuniform_scale(self.scale.x, self.scale.y, self.scale.z);
 
         ModelUniform {

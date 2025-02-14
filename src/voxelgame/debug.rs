@@ -2,7 +2,10 @@ use std::collections::HashMap;
 
 use bytemuck::{Pod, Zeroable};
 
-use super::{draw::Drawable, mesh::{Instance, Mesh, Vertex}};
+use super::{
+    draw::Drawable,
+    mesh::{Instance, Mesh, Vertex},
+};
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
@@ -112,30 +115,47 @@ impl DebugDrawer {
             queue.write_buffer(
                 &self.instance_buffer,
                 offset as u64,
-                bytemuck::cast_slice(&instances)
+                bytemuck::cast_slice(&instances),
             );
             offset += instances.len() * std::mem::size_of::<DebugModelInstance>();
         }
     }
 
-    fn cube_mesh(
-        device: &wgpu::Device,
-    ) -> Mesh {
-        Mesh::create(device, &[
-            DebugVertex { position: [0.0, 0.0, 0.0] },
-            DebugVertex { position: [1.0, 0.0, 0.0] },
-            DebugVertex { position: [1.0, 0.0, 1.0] },
-            DebugVertex { position: [0.0, 0.0, 1.0] },
-
-            DebugVertex { position: [0.0, 1.0, 0.0] },
-            DebugVertex { position: [1.0, 1.0, 0.0] },
-            DebugVertex { position: [1.0, 1.0, 1.0] },
-            DebugVertex { position: [0.0, 1.0, 1.0] },
-        ], &[
-            0, 1, 0, 3, 1, 2, 2, 3, // bottom
-            4, 5, 4, 7, 5, 6, 6, 7, // top
-            0, 4, 1, 5, 2, 6, 3, 7, // four lines
-        ])
+    fn cube_mesh(device: &wgpu::Device) -> Mesh {
+        Mesh::create(
+            device,
+            &[
+                DebugVertex {
+                    position: [0.0, 0.0, 0.0],
+                },
+                DebugVertex {
+                    position: [1.0, 0.0, 0.0],
+                },
+                DebugVertex {
+                    position: [1.0, 0.0, 1.0],
+                },
+                DebugVertex {
+                    position: [0.0, 0.0, 1.0],
+                },
+                DebugVertex {
+                    position: [0.0, 1.0, 0.0],
+                },
+                DebugVertex {
+                    position: [1.0, 1.0, 0.0],
+                },
+                DebugVertex {
+                    position: [1.0, 1.0, 1.0],
+                },
+                DebugVertex {
+                    position: [0.0, 1.0, 1.0],
+                },
+            ],
+            &[
+                0, 1, 0, 3, 1, 2, 2, 3, // bottom
+                4, 5, 4, 7, 5, 6, 6, 7, // top
+                0, 4, 1, 5, 2, 6, 3, 7, // four lines
+            ],
+        )
     }
 }
 
@@ -145,7 +165,11 @@ impl Drawable for DebugDrawer {
         for (model, instances) in self.instances.iter() {
             let mesh = &self.meshes[&model];
 
-            mesh.draw_instanced(render_pass, &self.instance_buffer, offset..offset + instances.len() as u32);
+            mesh.draw_instanced(
+                render_pass,
+                &self.instance_buffer,
+                offset..offset + instances.len() as u32,
+            );
             offset += instances.len() as u32;
         }
     }

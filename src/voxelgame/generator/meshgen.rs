@@ -1,12 +1,25 @@
-use crate::voxelgame::{draw::Model, mesh::{Mesh, Vertex3d}};
+use crate::voxelgame::{
+    draw::Model,
+    mesh::{Mesh, Vertex3d},
+};
 
-use super::{chunk::{BlockOffsetCoord, Chunk, WorldCoord, CHUNK_SIZE}, voxel::{Blocks, Voxel}, World};
+use super::{
+    chunk::{BlockOffsetCoord, Chunk, WorldCoord, CHUNK_SIZE},
+    voxel::{Blocks, Voxel},
+    World,
+};
 
 pub const TEXTURE_COUNT: (usize, usize) = (32, 32);
-pub const TEXTURE_UV_STEP: (f32, f32) = (1.0 / TEXTURE_COUNT.0 as f32, 1.0 / TEXTURE_COUNT.1 as f32);
+pub const TEXTURE_UV_STEP: (f32, f32) =
+    (1.0 / TEXTURE_COUNT.0 as f32, 1.0 / TEXTURE_COUNT.1 as f32);
 
 enum FaceOrientation {
-    Left, Right, Top, Bottom, Front, Back,
+    Left,
+    Right,
+    Top,
+    Bottom,
+    Front,
+    Back,
 }
 
 const fn texture_offset(texture_id: usize) -> (f32, f32) {
@@ -16,322 +29,242 @@ const fn texture_offset(texture_id: usize) -> (f32, f32) {
     )
 }
 
-fn face(texture_id: usize, offset: (usize, usize, usize), orientation: FaceOrientation) -> ([Vertex3d; 4], [u32; 6]) {
+fn face(
+    texture_id: usize,
+    offset: (usize, usize, usize),
+    orientation: FaceOrientation,
+) -> ([Vertex3d; 4], [u32; 6]) {
     let texture_offset = texture_offset(texture_id);
     match orientation {
-        FaceOrientation::Back => ([
-            Vertex3d {
-                position: [
-                    offset.0 as f32, 
-                    offset.1 as f32,
-                    offset.2 as f32 + 1.0,
-                ],
-                normal: [0.0, 0.0, 1.0],
-                uv: [
-                    texture_offset.0 + TEXTURE_UV_STEP.0,
-                    texture_offset.1 + TEXTURE_UV_STEP.1,
-                ],
-            },
-            Vertex3d {
-                position: [
-                    offset.0 as f32 + 1.0, 
-                    offset.1 as f32,
-                    offset.2 as f32 + 1.0,
-                ],
-                normal: [0.0, 0.0, 1.0],
-                uv: [
-                    texture_offset.0,
-                    texture_offset.1 + TEXTURE_UV_STEP.1,
-                ],
-            },
-            Vertex3d {
-                position: [
-                    offset.0 as f32 + 1.0, 
-                    offset.1 as f32 + 1.0,
-                    offset.2 as f32 + 1.0,
-                ],
-                normal: [0.0, 0.0, 1.0],
-                uv: [
-                    texture_offset.0,
-                    texture_offset.1,
-                ],
-            },
-            Vertex3d {
-                position: [
-                    offset.0 as f32, 
-                    offset.1 as f32 + 1.0,
-                    offset.2 as f32 + 1.0,
-                ],
-                normal: [0.0, 0.0, 1.0],
-                uv: [
-                    texture_offset.0 + TEXTURE_UV_STEP.0,
-                    texture_offset.1,
-                ],
-            },
-        ], [0, 1, 2, 0, 2, 3]),
-        FaceOrientation::Front => ([
-            Vertex3d {
-                position: [
-                    offset.0 as f32, 
-                    offset.1 as f32,
-                    offset.2 as f32,
-                ],
-                normal: [0.0, 0.0, -1.0],
-                uv: [
-                    texture_offset.0,
-                    texture_offset.1 + TEXTURE_UV_STEP.1,
-                ],
-            },
-            Vertex3d {
-                position: [
-                    offset.0 as f32 + 1.0, 
-                    offset.1 as f32,
-                    offset.2 as f32,
-                ],
-                normal: [0.0, 0.0, -1.0],
-                uv: [
-                    texture_offset.0 + TEXTURE_UV_STEP.0,
-                    texture_offset.1 + TEXTURE_UV_STEP.1,
-                ],
-            },
-            Vertex3d {
-                position: [
-                    offset.0 as f32 + 1.0, 
-                    offset.1 as f32 + 1.0,
-                    offset.2 as f32,
-                ],
-                normal: [0.0, 0.0, -1.0],
-                uv: [
-                    texture_offset.0 + TEXTURE_UV_STEP.0,
-                    texture_offset.1,
-                ],
-            },
-            Vertex3d {
-                position: [
-                    offset.0 as f32, 
-                    offset.1 as f32 + 1.0,
-                    offset.2 as f32,
-                ],
-                normal: [0.0, 0.0, -1.0],
-                uv: [
-                    texture_offset.0,
-                    texture_offset.1,
-                ],
-            },
-        ], [0, 2, 1, 0, 3, 2]),
-        FaceOrientation::Left => ([
-            Vertex3d {
-                position: [
-                    offset.0 as f32, 
-                    offset.1 as f32,
-                    offset.2 as f32 + 1.0,
-                ],
-                normal: [-1.0, 0.0, 0.0],
-                uv: [
-                    texture_offset.0,
-                    texture_offset.1 + TEXTURE_UV_STEP.1,
-                ],
-            },
-            Vertex3d {
-                position: [
-                    offset.0 as f32, 
-                    offset.1 as f32,
-                    offset.2 as f32,
-                ],
-                normal: [-1.0, 0.0, 0.0],
-                uv: [
-                    texture_offset.0 + TEXTURE_UV_STEP.0,
-                    texture_offset.1 + TEXTURE_UV_STEP.1,
-                ],
-            },
-            Vertex3d {
-                position: [
-                    offset.0 as f32, 
-                    offset.1 as f32 + 1.0,
-                    offset.2 as f32,
-                ],
-                normal: [-1.0, 0.0, 0.0],
-                uv: [
-                    texture_offset.0 + TEXTURE_UV_STEP.0,
-                    texture_offset.1,
-                ],
-            },
-            Vertex3d {
-                position: [
-                    offset.0 as f32, 
-                    offset.1 as f32 + 1.0,
-                    offset.2 as f32 + 1.0,
-                ],
-                normal: [-1.0, 0.0, 0.0],
-                uv: [
-                    texture_offset.0,
-                    texture_offset.1,
-                ],
-            },
-        ], [0, 2, 1, 0, 3, 2]),
-        FaceOrientation::Right => ([
-            Vertex3d {
-                position: [
-                    offset.0 as f32 + 1.0, 
-                    offset.1 as f32,
-                    offset.2 as f32,
-                ],
-                normal: [1.0, 0.0, 0.0],
-                uv: [
-                    texture_offset.0,
-                    texture_offset.1 + TEXTURE_UV_STEP.1,
-                ],
-            },
-            Vertex3d {
-                position: [
-                    offset.0 as f32 + 1.0, 
-                    offset.1 as f32,
-                    offset.2 as f32 + 1.0,
-                ],
-                normal: [1.0, 0.0, 0.0],
-                uv: [
-                    texture_offset.0 + TEXTURE_UV_STEP.0,
-                    texture_offset.1 + TEXTURE_UV_STEP.1,
-                ],
-            },
-            Vertex3d {
-                position: [
-                    offset.0 as f32 + 1.0, 
-                    offset.1 as f32 + 1.0,
-                    offset.2 as f32 + 1.0,
-                ],
-                normal: [1.0, 0.0, 0.0],
-                uv: [
-                    texture_offset.0 + TEXTURE_UV_STEP.0,
-                    texture_offset.1,
-                ],
-            },
-            Vertex3d {
-                position: [
-                    offset.0 as f32 + 1.0, 
-                    offset.1 as f32 + 1.0,
-                    offset.2 as f32,
-                ],
-                normal: [1.0, 0.0, 0.0],
-                uv: [
-                    texture_offset.0,
-                    texture_offset.1,
-                ],
-            },
-        ], [0, 2, 1, 0, 3, 2]),
-        FaceOrientation::Bottom => ([
-            Vertex3d {
-                position: [
-                    offset.0 as f32,
-                    offset.1 as f32,
-                    offset.2 as f32,
-                ],
-                normal: [0.0, -1.0, 0.0],
-                uv: [
-                    texture_offset.0,
-                    texture_offset.1 + TEXTURE_UV_STEP.1,
-                ],
-            },
-            Vertex3d {
-                position: [
-                    offset.0 as f32 + 1.0, 
-                    offset.1 as f32,
-                    offset.2 as f32,
-                ],
-                normal: [0.0, -1.0, 0.0],
-                uv: [
-                    texture_offset.0 + TEXTURE_UV_STEP.0,
-                    texture_offset.1 + TEXTURE_UV_STEP.1,
-                ],
-            },
-            Vertex3d {
-                position: [
-                    offset.0 as f32 + 1.0, 
-                    offset.1 as f32,
-                    offset.2 as f32 + 1.0,
-                ],
-                normal: [0.0, -1.0, 0.0],
-                uv: [
-                    texture_offset.0 + TEXTURE_UV_STEP.0,
-                    texture_offset.1,
-                ],
-            },
-            Vertex3d {
-                position: [
-                    offset.0 as f32, 
-                    offset.1 as f32,
-                    offset.2 as f32 + 1.0,
-                ],
-                normal: [0.0, -1.0, 0.0],
-                uv: [
-                    texture_offset.0,
-                    texture_offset.1,
-                ],
-            },
-        ], [0, 1, 2, 0, 2, 3]),
-        FaceOrientation::Top => ([
-            Vertex3d {
-                position: [
-                    offset.0 as f32, 
-                    offset.1 as f32 + 1.0,
-                    offset.2 as f32,
-                ],
-                normal: [0.0, 1.0, 0.0],
-                uv: [
-                    texture_offset.0,
-                    texture_offset.1 + TEXTURE_UV_STEP.1,
-                ],
-            },
-            Vertex3d {
-                position: [
-                    offset.0 as f32 + 1.0, 
-                    offset.1 as f32 + 1.0,
-                    offset.2 as f32,
-                ],
-                normal: [0.0, 1.0, 0.0],
-                uv: [
-                    texture_offset.0 + TEXTURE_UV_STEP.0,
-                    texture_offset.1 + TEXTURE_UV_STEP.1,
-                ],
-            },
-            Vertex3d {
-                position: [
-                    offset.0 as f32 + 1.0, 
-                    offset.1 as f32 + 1.0,
-                    offset.2 as f32 + 1.0,
-                ],
-                normal: [0.0, 1.0, 0.0],
-                uv: [
-                    texture_offset.0 + TEXTURE_UV_STEP.0,
-                    texture_offset.1,
-                ],
-            },
-            Vertex3d {
-                position: [
-                    offset.0 as f32, 
-                    offset.1 as f32 + 1.0,
-                    offset.2 as f32 + 1.0,
-                ],
-                normal: [0.0, 1.0, 0.0],
-                uv: [
-                    texture_offset.0,
-                    texture_offset.1,
-                ],
-            },
-        ], [0, 2, 1, 0, 3, 2])
+        FaceOrientation::Back => (
+            [
+                Vertex3d {
+                    position: [offset.0 as f32, offset.1 as f32, offset.2 as f32 + 1.0],
+                    normal: [0.0, 0.0, 1.0],
+                    uv: [
+                        texture_offset.0 + TEXTURE_UV_STEP.0,
+                        texture_offset.1 + TEXTURE_UV_STEP.1,
+                    ],
+                },
+                Vertex3d {
+                    position: [
+                        offset.0 as f32 + 1.0,
+                        offset.1 as f32,
+                        offset.2 as f32 + 1.0,
+                    ],
+                    normal: [0.0, 0.0, 1.0],
+                    uv: [texture_offset.0, texture_offset.1 + TEXTURE_UV_STEP.1],
+                },
+                Vertex3d {
+                    position: [
+                        offset.0 as f32 + 1.0,
+                        offset.1 as f32 + 1.0,
+                        offset.2 as f32 + 1.0,
+                    ],
+                    normal: [0.0, 0.0, 1.0],
+                    uv: [texture_offset.0, texture_offset.1],
+                },
+                Vertex3d {
+                    position: [
+                        offset.0 as f32,
+                        offset.1 as f32 + 1.0,
+                        offset.2 as f32 + 1.0,
+                    ],
+                    normal: [0.0, 0.0, 1.0],
+                    uv: [texture_offset.0 + TEXTURE_UV_STEP.0, texture_offset.1],
+                },
+            ],
+            [0, 1, 2, 0, 2, 3],
+        ),
+        FaceOrientation::Front => (
+            [
+                Vertex3d {
+                    position: [offset.0 as f32, offset.1 as f32, offset.2 as f32],
+                    normal: [0.0, 0.0, -1.0],
+                    uv: [texture_offset.0, texture_offset.1 + TEXTURE_UV_STEP.1],
+                },
+                Vertex3d {
+                    position: [offset.0 as f32 + 1.0, offset.1 as f32, offset.2 as f32],
+                    normal: [0.0, 0.0, -1.0],
+                    uv: [
+                        texture_offset.0 + TEXTURE_UV_STEP.0,
+                        texture_offset.1 + TEXTURE_UV_STEP.1,
+                    ],
+                },
+                Vertex3d {
+                    position: [
+                        offset.0 as f32 + 1.0,
+                        offset.1 as f32 + 1.0,
+                        offset.2 as f32,
+                    ],
+                    normal: [0.0, 0.0, -1.0],
+                    uv: [texture_offset.0 + TEXTURE_UV_STEP.0, texture_offset.1],
+                },
+                Vertex3d {
+                    position: [offset.0 as f32, offset.1 as f32 + 1.0, offset.2 as f32],
+                    normal: [0.0, 0.0, -1.0],
+                    uv: [texture_offset.0, texture_offset.1],
+                },
+            ],
+            [0, 2, 1, 0, 3, 2],
+        ),
+        FaceOrientation::Left => (
+            [
+                Vertex3d {
+                    position: [offset.0 as f32, offset.1 as f32, offset.2 as f32 + 1.0],
+                    normal: [-1.0, 0.0, 0.0],
+                    uv: [texture_offset.0, texture_offset.1 + TEXTURE_UV_STEP.1],
+                },
+                Vertex3d {
+                    position: [offset.0 as f32, offset.1 as f32, offset.2 as f32],
+                    normal: [-1.0, 0.0, 0.0],
+                    uv: [
+                        texture_offset.0 + TEXTURE_UV_STEP.0,
+                        texture_offset.1 + TEXTURE_UV_STEP.1,
+                    ],
+                },
+                Vertex3d {
+                    position: [offset.0 as f32, offset.1 as f32 + 1.0, offset.2 as f32],
+                    normal: [-1.0, 0.0, 0.0],
+                    uv: [texture_offset.0 + TEXTURE_UV_STEP.0, texture_offset.1],
+                },
+                Vertex3d {
+                    position: [
+                        offset.0 as f32,
+                        offset.1 as f32 + 1.0,
+                        offset.2 as f32 + 1.0,
+                    ],
+                    normal: [-1.0, 0.0, 0.0],
+                    uv: [texture_offset.0, texture_offset.1],
+                },
+            ],
+            [0, 2, 1, 0, 3, 2],
+        ),
+        FaceOrientation::Right => (
+            [
+                Vertex3d {
+                    position: [offset.0 as f32 + 1.0, offset.1 as f32, offset.2 as f32],
+                    normal: [1.0, 0.0, 0.0],
+                    uv: [texture_offset.0, texture_offset.1 + TEXTURE_UV_STEP.1],
+                },
+                Vertex3d {
+                    position: [
+                        offset.0 as f32 + 1.0,
+                        offset.1 as f32,
+                        offset.2 as f32 + 1.0,
+                    ],
+                    normal: [1.0, 0.0, 0.0],
+                    uv: [
+                        texture_offset.0 + TEXTURE_UV_STEP.0,
+                        texture_offset.1 + TEXTURE_UV_STEP.1,
+                    ],
+                },
+                Vertex3d {
+                    position: [
+                        offset.0 as f32 + 1.0,
+                        offset.1 as f32 + 1.0,
+                        offset.2 as f32 + 1.0,
+                    ],
+                    normal: [1.0, 0.0, 0.0],
+                    uv: [texture_offset.0 + TEXTURE_UV_STEP.0, texture_offset.1],
+                },
+                Vertex3d {
+                    position: [
+                        offset.0 as f32 + 1.0,
+                        offset.1 as f32 + 1.0,
+                        offset.2 as f32,
+                    ],
+                    normal: [1.0, 0.0, 0.0],
+                    uv: [texture_offset.0, texture_offset.1],
+                },
+            ],
+            [0, 2, 1, 0, 3, 2],
+        ),
+        FaceOrientation::Bottom => (
+            [
+                Vertex3d {
+                    position: [offset.0 as f32, offset.1 as f32, offset.2 as f32],
+                    normal: [0.0, -1.0, 0.0],
+                    uv: [texture_offset.0, texture_offset.1 + TEXTURE_UV_STEP.1],
+                },
+                Vertex3d {
+                    position: [offset.0 as f32 + 1.0, offset.1 as f32, offset.2 as f32],
+                    normal: [0.0, -1.0, 0.0],
+                    uv: [
+                        texture_offset.0 + TEXTURE_UV_STEP.0,
+                        texture_offset.1 + TEXTURE_UV_STEP.1,
+                    ],
+                },
+                Vertex3d {
+                    position: [
+                        offset.0 as f32 + 1.0,
+                        offset.1 as f32,
+                        offset.2 as f32 + 1.0,
+                    ],
+                    normal: [0.0, -1.0, 0.0],
+                    uv: [texture_offset.0 + TEXTURE_UV_STEP.0, texture_offset.1],
+                },
+                Vertex3d {
+                    position: [offset.0 as f32, offset.1 as f32, offset.2 as f32 + 1.0],
+                    normal: [0.0, -1.0, 0.0],
+                    uv: [texture_offset.0, texture_offset.1],
+                },
+            ],
+            [0, 1, 2, 0, 2, 3],
+        ),
+        FaceOrientation::Top => (
+            [
+                Vertex3d {
+                    position: [offset.0 as f32, offset.1 as f32 + 1.0, offset.2 as f32],
+                    normal: [0.0, 1.0, 0.0],
+                    uv: [texture_offset.0, texture_offset.1 + TEXTURE_UV_STEP.1],
+                },
+                Vertex3d {
+                    position: [
+                        offset.0 as f32 + 1.0,
+                        offset.1 as f32 + 1.0,
+                        offset.2 as f32,
+                    ],
+                    normal: [0.0, 1.0, 0.0],
+                    uv: [
+                        texture_offset.0 + TEXTURE_UV_STEP.0,
+                        texture_offset.1 + TEXTURE_UV_STEP.1,
+                    ],
+                },
+                Vertex3d {
+                    position: [
+                        offset.0 as f32 + 1.0,
+                        offset.1 as f32 + 1.0,
+                        offset.2 as f32 + 1.0,
+                    ],
+                    normal: [0.0, 1.0, 0.0],
+                    uv: [texture_offset.0 + TEXTURE_UV_STEP.0, texture_offset.1],
+                },
+                Vertex3d {
+                    position: [
+                        offset.0 as f32,
+                        offset.1 as f32 + 1.0,
+                        offset.2 as f32 + 1.0,
+                    ],
+                    normal: [0.0, 1.0, 0.0],
+                    uv: [texture_offset.0, texture_offset.1],
+                },
+            ],
+            [0, 2, 1, 0, 3, 2],
+        ),
     }
 }
 
 #[inline]
 fn get_voxel_wrapper<T>(coord: BlockOffsetCoord, chunk: &Chunk, world: &World<T>) -> Option<Voxel> {
-    if coord.x < 0 || coord.x >= CHUNK_SIZE as i32 ||
-        coord.y < 0 || coord.y >= CHUNK_SIZE as i32 ||
-        coord.z < 0 || coord.z >= CHUNK_SIZE as i32
+    if coord.x < 0
+        || coord.x >= CHUNK_SIZE as i32
+        || coord.y < 0
+        || coord.y >= CHUNK_SIZE as i32
+        || coord.z < 0
+        || coord.z >= CHUNK_SIZE as i32
     {
-        world.get_voxel(WorldCoord::from_chunk_and_local(
-            chunk.coord,
-            coord
-        ))
+        world.get_voxel(WorldCoord::from_chunk_and_local(chunk.coord, coord))
     } else {
         chunk.get_voxel(coord.into())
     }
@@ -360,138 +293,150 @@ pub fn generate_model<T>(
                 // Left
                 if let Some(voxel) = get_voxel_wrapper(coord.left(), chunk, world) {
                     let block_info = Blocks::BLOCKS[voxel.id as usize];
-                    
+
                     if block_info.transparent {
                         let (vx, idx) = face(
                             current_block_info.texture_ids[0],
                             (x as usize, y as usize, z as usize),
-                            FaceOrientation::Left
+                            FaceOrientation::Left,
                         );
-                        idx.into_iter().for_each(|i| indices.push(i + vertices.len() as u32));
+                        idx.into_iter()
+                            .for_each(|i| indices.push(i + vertices.len() as u32));
                         vx.into_iter().for_each(|v| vertices.push(v));
                     }
                 } else {
                     let (vx, idx) = face(
                         current_block_info.texture_ids[0],
                         (x as usize, y as usize, z as usize),
-                        FaceOrientation::Left
+                        FaceOrientation::Left,
                     );
-                    idx.into_iter().for_each(|i| indices.push(i + vertices.len() as u32));
+                    idx.into_iter()
+                        .for_each(|i| indices.push(i + vertices.len() as u32));
                     vx.into_iter().for_each(|v| vertices.push(v));
                 }
 
                 // Right
                 if let Some(voxel) = get_voxel_wrapper(coord.right(), chunk, world) {
                     let block_info = Blocks::BLOCKS[voxel.id as usize];
-                    
+
                     if block_info.transparent {
                         let (vx, idx) = face(
                             current_block_info.texture_ids[1],
                             (x as usize, y as usize, z as usize),
-                            FaceOrientation::Right
+                            FaceOrientation::Right,
                         );
-                        idx.into_iter().for_each(|i| indices.push(i + vertices.len() as u32));
+                        idx.into_iter()
+                            .for_each(|i| indices.push(i + vertices.len() as u32));
                         vx.into_iter().for_each(|v| vertices.push(v));
                     }
                 } else {
                     let (vx, idx) = face(
                         current_block_info.texture_ids[1],
                         (x as usize, y as usize, z as usize),
-                        FaceOrientation::Right
+                        FaceOrientation::Right,
                     );
-                    idx.into_iter().for_each(|i| indices.push(i + vertices.len() as u32));
+                    idx.into_iter()
+                        .for_each(|i| indices.push(i + vertices.len() as u32));
                     vx.into_iter().for_each(|v| vertices.push(v));
                 }
 
                 // Top
                 if let Some(voxel) = get_voxel_wrapper(coord.up(), chunk, world) {
                     let block_info = Blocks::BLOCKS[voxel.id as usize];
-                    
+
                     if block_info.transparent {
                         let (vx, idx) = face(
                             current_block_info.texture_ids[2],
                             (x as usize, y as usize, z as usize),
-                            FaceOrientation::Top
+                            FaceOrientation::Top,
                         );
-                        idx.into_iter().for_each(|i| indices.push(i + vertices.len() as u32));
+                        idx.into_iter()
+                            .for_each(|i| indices.push(i + vertices.len() as u32));
                         vx.into_iter().for_each(|v| vertices.push(v));
                     }
                 } else {
                     let (vx, idx) = face(
                         current_block_info.texture_ids[2],
                         (x as usize, y as usize, z as usize),
-                        FaceOrientation::Top
+                        FaceOrientation::Top,
                     );
-                    idx.into_iter().for_each(|i| indices.push(i + vertices.len() as u32));
+                    idx.into_iter()
+                        .for_each(|i| indices.push(i + vertices.len() as u32));
                     vx.into_iter().for_each(|v| vertices.push(v));
                 }
-                
+
                 // Bottom
                 if let Some(voxel) = get_voxel_wrapper(coord.down(), chunk, world) {
                     let block_info = Blocks::BLOCKS[voxel.id as usize];
-                    
+
                     if block_info.transparent {
                         let (vx, idx) = face(
                             current_block_info.texture_ids[3],
                             (x as usize, y as usize, z as usize),
-                            FaceOrientation::Bottom
+                            FaceOrientation::Bottom,
                         );
-                        idx.into_iter().for_each(|i| indices.push(i + vertices.len() as u32));
+                        idx.into_iter()
+                            .for_each(|i| indices.push(i + vertices.len() as u32));
                         vx.into_iter().for_each(|v| vertices.push(v));
                     }
                 } else {
                     let (vx, idx) = face(
                         current_block_info.texture_ids[3],
                         (x as usize, y as usize, z as usize),
-                        FaceOrientation::Bottom
+                        FaceOrientation::Bottom,
                     );
-                    idx.into_iter().for_each(|i| indices.push(i + vertices.len() as u32));
+                    idx.into_iter()
+                        .for_each(|i| indices.push(i + vertices.len() as u32));
                     vx.into_iter().for_each(|v| vertices.push(v));
                 }
 
                 // Front
                 if let Some(voxel) = get_voxel_wrapper(coord.front(), chunk, world) {
                     let block_info = Blocks::BLOCKS[voxel.id as usize];
-                    
+
                     if block_info.transparent {
                         let (vx, idx) = face(
                             current_block_info.texture_ids[4],
                             (x as usize, y as usize, z as usize),
-                            FaceOrientation::Front
+                            FaceOrientation::Front,
                         );
-                        idx.into_iter().for_each(|i| indices.push(i + vertices.len() as u32));
+                        idx.into_iter()
+                            .for_each(|i| indices.push(i + vertices.len() as u32));
                         vx.into_iter().for_each(|v| vertices.push(v));
                     }
                 } else {
                     let (vx, idx) = face(
                         current_block_info.texture_ids[4],
                         (x as usize, y as usize, z as usize),
-                        FaceOrientation::Front
+                        FaceOrientation::Front,
                     );
-                    idx.into_iter().for_each(|i| indices.push(i + vertices.len() as u32));
+                    idx.into_iter()
+                        .for_each(|i| indices.push(i + vertices.len() as u32));
                     vx.into_iter().for_each(|v| vertices.push(v));
                 }
 
                 // Back
                 if let Some(voxel) = get_voxel_wrapper(coord.back(), chunk, world) {
                     let block_info = Blocks::BLOCKS[voxel.id as usize];
-                    
+
                     if block_info.transparent {
                         let (vx, idx) = face(
                             current_block_info.texture_ids[5],
                             (x as usize, y as usize, z as usize),
-                            FaceOrientation::Back
+                            FaceOrientation::Back,
                         );
-                        idx.into_iter().for_each(|i| indices.push(i + vertices.len() as u32));
+                        idx.into_iter()
+                            .for_each(|i| indices.push(i + vertices.len() as u32));
                         vx.into_iter().for_each(|v| vertices.push(v));
                     }
                 } else {
                     let (vx, idx) = face(
                         current_block_info.texture_ids[5],
                         (x as usize, y as usize, z as usize),
-                        FaceOrientation::Back
+                        FaceOrientation::Back,
                     );
-                    idx.into_iter().for_each(|i| indices.push(i + vertices.len() as u32));
+                    idx.into_iter()
+                        .for_each(|i| indices.push(i + vertices.len() as u32));
                     vx.into_iter().for_each(|v| vertices.push(v));
                 }
             }
@@ -499,14 +444,10 @@ pub fn generate_model<T>(
     }
 
     if vertices.len() == 0 {
-        return None
+        return None;
     }
 
-    let mut model = Model::new(
-        bg_layout,
-        device,
-        Mesh::create(device, &vertices, &indices)
-    );
+    let mut model = Model::new(bg_layout, device, Mesh::create(device, &vertices, &indices));
     model.position = chunk.coord.into();
 
     Some(model)
