@@ -54,6 +54,7 @@ pub struct VoxelGame<'w> {
 
     generate: bool,
     draw_debug: bool,
+    cursor_locked: bool,
 }
 
 impl<'w> VoxelGame<'w> {
@@ -181,6 +182,7 @@ impl<'w> VoxelGame<'w> {
 
             generate: true,
             draw_debug: false,
+            cursor_locked: true,
         }
     }
 
@@ -576,6 +578,7 @@ impl<'w> VoxelGame<'w> {
             sky_pass.draw(0..4, 0..1);
         }
 
+        let chunks_drawn;
         {
             let mut opaque_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,
@@ -606,7 +609,7 @@ impl<'w> VoxelGame<'w> {
             opaque_pass.set_bind_group(1, &self.bind_groups["terrain_texture"], &[]);
             opaque_pass.set_bind_group(2, &self.bind_groups["camera"], &[]);
 
-            self.world.draw_distance(&mut opaque_pass, self.camera.eye.to_vec(), 16);
+            chunks_drawn = self.world.draw_distance(&mut opaque_pass, self.camera.eye.to_vec(), 16);
         }
 
         if self.draw_debug {
@@ -667,15 +670,14 @@ impl<'w> VoxelGame<'w> {
                 occlusion_query_set: None,
             }).forget_lifetime(); // NOTE: Reaaally hope this doesn't leak
 
-            let input = self.egui_state.egui_input();
+            let input = self.egui_state.take_egui_input(&self.window);
 
             let full_output = self.egui_context.run(input.clone(), |ctx| {
                 egui::Window::new("Stats").show(&ctx, |ui| {
                     // Draw UI
-                    ui.label("Hello, world!");
-                    if ui.button("Press this").clicked() {
-                        log::info!("Button pressed")
-                    }
+                    ui.label(format!("Chunks in queue: {}", self.world.chunks_enqueued_count()));
+                    ui.label(format!("Meshes in quuee: {}", self.world.meshgen_queue_count()));
+                    ui.label(format!("Chunks drawn: {}", chunks_drawn));
                 });
             });
 
@@ -748,6 +750,11 @@ impl<'w> Game for VoxelGame<'w> {
         _window_id: winit::window::WindowId,
         event: winit::event::WindowEvent,
     ) {
+        let egui_response = self.egui_state.on_window_event(&self.window, &event);
+        if egui_response.consumed {
+            return;
+        }
+
         self.camera_controller.process_window_events(&event);
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
@@ -812,6 +819,22 @@ impl<'w> Game for VoxelGame<'w> {
                         }
                         PhysicalKey::Code(KeyCode::KeyG) => {
                             self.generate = !self.generate;
+                        }
+                        PhysicalKey::Code(KeyCode::ControlLeft) => {
+                            if self.cursor_locked {
+                                self.window.set_cursor_visible(true);
+                                self.window.set_cursor_grab(CursorGrabMode::None)
+                                    .unwrap();
+                                self.cursor_locked = false;
+                            } else {
+                                self.window.set_cursor_visible(false);
+                                self.window.set_cursor_grab(CursorGrabMode::Locked)
+                                    .unwrap_or_else(
+                                        |_| self.window.set_cursor_grab(CursorGrabMode::Confined)
+                                            .expect("No cursor confine/lock available.")
+                                    );
+                                self.cursor_locked = true;
+                            }
                         }
                         _ => {}
                     }

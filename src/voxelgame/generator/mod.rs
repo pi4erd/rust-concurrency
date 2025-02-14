@@ -249,6 +249,14 @@ impl<T> World<T> {
         queue.push_back(chunk_coord);
     }
 
+    pub fn chunks_enqueued_count(&self) -> usize {
+        self.chunk_gen_queue.lock().unwrap().len()
+    }
+
+    pub fn meshgen_queue_count(&self) -> usize {
+        self.meshgen_queue.lock().unwrap().len()
+    }
+
     pub fn dispatch_threads(&mut self, worldgen: usize) where T: 'static + Generator {
         for _ in 0..worldgen {
             let tx = self.sender.clone();
@@ -363,7 +371,9 @@ impl<T> World<T> {
         }
     }
 
-    pub fn draw_distance(&self, render_pass: &mut wgpu::RenderPass, eye: cgmath::Vector3<f32>, max_chunks: usize) {
+    // Returns a number of chunks drawn
+    pub fn draw_distance(&self, render_pass: &mut wgpu::RenderPass, eye: cgmath::Vector3<f32>, max_chunks: usize) -> usize {
+        let mut count = 0;
         for (coord, model) in self.models.iter() {
             let position: cgmath::Vector3<f32> = (*coord).into(); // rust being weird
             if position.distance(eye) > (max_chunks as f32 * CHUNK_SIZE as f32) {
@@ -371,7 +381,9 @@ impl<T> World<T> {
             }
             // log::debug!("Drawing chunk at {}", coord);
             model.draw(render_pass);
+            count += 1;
         }
+        count
     }
 
     pub fn append_debug(

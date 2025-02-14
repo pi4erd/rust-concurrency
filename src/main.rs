@@ -7,6 +7,8 @@ mod voxelgame;
 
 fn main() {
     pretty_env_logger::init();
+
+    // TODO: Add panic hook with message box, `dialog` crate
     
     let event_loop = EventLoop::new().unwrap();
     let mut window: GameWindow<VoxelGame<'_>> = GameWindow::new("Voxel game");
