@@ -137,16 +137,13 @@ impl<'w> VoxelGame<'w> {
         let mut rng = rand::rng();
         let mut world = World::new(NoiseGenerator::new(rng.random_range(i32::MIN..i32::MAX)));
 
-        world.dispatch_threads(5);
+        world.dispatch_threads(3);
 
         window.set_cursor_visible(false);
-        window
-            .set_cursor_grab(CursorGrabMode::Locked)
-            .unwrap_or_else(|_| {
-                window
-                    .set_cursor_grab(CursorGrabMode::Confined)
-                    .expect("No cursor confine/lock available.")
-            });
+        match window.set_cursor_grab(CursorGrabMode::Locked) {
+            Ok(()) => {},
+            Err(e) => log::error!("No cursor lock available: {e}")
+        }
 
         // Setup EGUI
 
@@ -866,13 +863,10 @@ impl<'w> Game for VoxelGame<'w> {
                                 self.cursor_locked = false;
                             } else {
                                 self.window.set_cursor_visible(false);
-                                self.window
-                                    .set_cursor_grab(CursorGrabMode::Locked)
-                                    .unwrap_or_else(|_| {
-                                        self.window
-                                            .set_cursor_grab(CursorGrabMode::Confined)
-                                            .expect("No cursor confine/lock available.")
-                                    });
+                                match self.window.set_cursor_grab(CursorGrabMode::Locked) {
+                                    Ok(()) => {},
+                                    Err(e) => log::error!("No cursor lock available: {e}")
+                                }
                                 self.cursor_locked = true;
                             }
                         }
