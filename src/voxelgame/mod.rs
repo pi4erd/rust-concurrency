@@ -826,7 +826,8 @@ impl<'w> Game for VoxelGame<'w> {
                             );
 
                             if let Some((world_coord, _, _)) = hit {
-                                let world_float_coord: cgmath::Vector3<f32> = world_coord.into();
+                                // TODO: Fix block placement
+                                let _world_float_coord: cgmath::Vector3<f32> = world_coord.into();
                                 
                                 let normal = cgmath::Vector3::<f32>::new(0.0, 1.0, 0.0);
                                 let offset: BlockOffsetCoord = normal.into();
