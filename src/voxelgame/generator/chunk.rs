@@ -5,7 +5,7 @@ use std::{
 
 use super::voxel::{Blocks, Voxel};
 
-pub const CHUNK_SIZE: usize = 32; // NOTE: size > 20 crashes debug build
+pub const CHUNK_SIZE: usize = 40;
 const CHUNK_SIZE_ITEMS: usize = CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Hash)]
@@ -176,6 +176,16 @@ impl Into<ChunkLocalCoord> for BlockOffsetCoord {
             x: self.x as usize % CHUNK_SIZE,
             y: self.y as usize % CHUNK_SIZE,
             z: self.z as usize % CHUNK_SIZE,
+        }
+    }
+}
+
+impl From<cgmath::Vector3<f32>> for BlockOffsetCoord {
+    fn from(value: cgmath::Vector3<f32>) -> Self {
+        Self {
+            x: value.x.floor() as i32,
+            y: value.y.floor() as i32,
+            z: value.z.floor() as i32,
         }
     }
 }

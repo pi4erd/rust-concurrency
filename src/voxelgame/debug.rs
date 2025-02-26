@@ -49,7 +49,7 @@ impl Vertex for DebugVertex {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub enum ModelName {
-    Cube,
+    Cube, Line
 }
 
 pub struct DebugDrawer {
@@ -65,7 +65,9 @@ impl DebugDrawer {
         let mut meshes = HashMap::new();
         let mut instances = HashMap::new();
         meshes.insert(ModelName::Cube, Self::cube_mesh(device));
+        meshes.insert(ModelName::Line, Self::line_mesh(device));
         instances.insert(ModelName::Cube, Vec::new());
+        instances.insert(ModelName::Line, Vec::new());
 
         let instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("debug_instance_buffer"),
@@ -119,6 +121,21 @@ impl DebugDrawer {
             );
             offset += instances.len() * std::mem::size_of::<DebugModelInstance>();
         }
+    }
+
+    fn line_mesh(device: &wgpu::Device) -> Mesh {
+        Mesh::create(
+            device,
+            &[
+                DebugVertex {
+                    position: [0.0, 0.0, 0.0],
+                },
+                DebugVertex {
+                    position: [1.0, 0.0, 0.0],
+                },
+            ],
+            &[0, 1],
+        )
     }
 
     fn cube_mesh(device: &wgpu::Device) -> Mesh {

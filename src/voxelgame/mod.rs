@@ -9,10 +9,10 @@ mod texture;
 use std::{collections::HashMap, sync::Arc, time::Instant};
 
 use camera::{Camera, CameraController};
-use cgmath::EuclideanSpace;
+use cgmath::{EuclideanSpace, InnerSpace};
 use debug::{DebugDrawer, DebugModelInstance, DebugVertex};
 use draw::Drawable;
-use generator::{NoiseGenerator, Ray, World};
+use generator::{chunk::BlockOffsetCoord, voxel::Blocks, NoiseGenerator, Ray, World};
 use mesh::{Instance, Vertex, Vertex3d};
 use pollster::FutureExt;
 use rand::Rng;
@@ -137,7 +137,7 @@ impl<'w> VoxelGame<'w> {
         let mut rng = rand::rng();
         let mut world = World::new(NoiseGenerator::new(rng.random_range(i32::MIN..i32::MAX)));
 
-        world.dispatch_threads(3);
+        world.dispatch_threads(5);
 
         window.set_cursor_visible(false);
         window
@@ -503,7 +503,7 @@ impl<'w> VoxelGame<'w> {
         self.camera_controller.update(&mut self.camera, delta);
 
         if self.generate {
-            self.world.enqueue_chunks_around(&self.camera, 7, 7);
+            self.world.enqueue_chunks_around(&self.camera, 16, 10);
         }
 
         self.world.receive_chunk();
@@ -525,16 +525,36 @@ impl<'w> VoxelGame<'w> {
                 origin: self.camera.eye,
                 direction: -self.camera.direction, // TODO: Figure out why negative
             },
-            None,
+            Some(&mut self.debug),
         );
 
-        if let Some((position, _)) = hit {
+        if let Some((position, hit_point, _)) = hit {
             self.debug.append_mesh(
                 debug::ModelName::Cube,
                 cgmath::Vector3::new(position.x as f32, position.y as f32, position.z as f32)
-                    - cgmath::Vector3::new(0.05, 0.05, 0.05),
-                cgmath::Vector3::new(1.1, 1.1, 1.1),
+                    - cgmath::Vector3::new(0.005, 0.005, 0.005),
+                cgmath::Vector3::new(1.01, 1.01, 1.01),
                 cgmath::Vector4::new(0.0, 0.0, 0.0, 1.0),
+            );
+
+            let position_world: cgmath::Vector3<f32> = position.into();
+            let hit_offset = hit_point - position_world;
+
+            let normal = if hit_offset.x.abs() > hit_offset.y.abs() && hit_offset.x.abs() > hit_offset.z.abs() {
+                cgmath::Vector3::<f32>::new(hit_offset.x.ceil(), 0.0, 0.0)
+            } else if hit_offset.y.abs() > hit_offset.x.abs() && hit_offset.y.abs() > hit_offset.z.abs() {
+                cgmath::Vector3::<f32>::new(0.0, hit_offset.y.ceil(), 0.0)
+            } else if hit_offset.z.abs() > hit_offset.x.abs() && hit_offset.z.abs() > hit_offset.y.abs() {
+                cgmath::Vector3::<f32>::new(0.0, 0.0, hit_offset.z.ceil())
+            } else {
+                cgmath::Vector3::<f32>::new(1.0, 1.0, 1.0)
+            }.normalize();
+
+            self.debug.append_mesh(
+                debug::ModelName::Cube,
+                hit_point.to_vec(),
+                normal + cgmath::Vector3::new(0.01, 0.01, 0.01),
+                cgmath::Vector4::new(1.0, 1.0, 1.0, 1.0),
             );
         }
 
@@ -677,7 +697,7 @@ impl<'w> VoxelGame<'w> {
                         self.world.chunks_enqueued_count()
                     ));
                     ui.label(format!(
-                        "Meshes in quuee: {}",
+                        "Meshes in queue: {}",
                         self.world.meshgen_queue_count()
                     ));
                     ui.label(format!("Chunks drawn: {}", chunks_drawn));
@@ -792,8 +812,27 @@ impl<'w> Game for VoxelGame<'w> {
                                 None,
                             );
 
-                            if let Some((world_coord, _)) = hit {
+                            if let Some((world_coord, _, _)) = hit {
                                 self.world.break_block(world_coord);
+                            }
+                        }
+                        winit::event::MouseButton::Right => {
+                            let hit = self.world.ray_hit(
+                                Ray {
+                                    origin: self.camera.eye,
+                                    direction: -self.camera.direction,
+                                },
+                                None,
+                            );
+
+                            if let Some((world_coord, _, _)) = hit {
+                                let world_float_coord: cgmath::Vector3<f32> = world_coord.into();
+                                
+                                let normal = cgmath::Vector3::<f32>::new(0.0, 1.0, 0.0);
+                                let offset: BlockOffsetCoord = normal.into();
+
+                                log::info!("placed block with offset {:?}", offset);
+                                self.world.set_voxel(world_coord + offset, Blocks::DIRT_BLOCK.default_state());
                             }
                         }
                         _ => {}

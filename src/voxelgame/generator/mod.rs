@@ -4,7 +4,6 @@ pub mod voxel;
 
 use std::{
     collections::{HashMap, HashSet, VecDeque},
-    hash::Hasher,
     sync::{
         mpsc::{self, Receiver, Sender},
         Arc, Mutex,
@@ -17,6 +16,7 @@ use fastnoise_lite::FastNoiseLite;
 
 use chunk::{Chunk, ChunkCoord, ChunkLocalCoord, WorldCoord, CHUNK_SIZE};
 use meshgen::generate_model;
+use rand::Rng;
 use voxel::{Blocks, Voxel};
 
 use super::{
@@ -66,6 +66,8 @@ impl NoiseGenerator {
 impl Generator for NoiseGenerator {
     fn generate(&self, chunk: &mut Chunk) {
         const SCALE: f32 = 0.3;
+        
+        let mut rng = rand::rng();
 
         for x in 0..CHUNK_SIZE {
             for z in 0..CHUNK_SIZE {
@@ -110,6 +112,18 @@ impl Generator for NoiseGenerator {
                         }
 
                         if wy - height_sample as i32 >= 0 {
+                            if rng.random_bool(0.0001) {
+                                for k in 0..10 {
+                                    chunk.set_voxel(
+                                        ChunkLocalCoord {
+                                            x: coord.x,
+                                            y: coord.y + k,
+                                            z: coord.z,
+                                        },
+                                        Blocks::DIRT_BLOCK.default_state()
+                                    );
+                                }
+                            }
                             chunk.set_voxel(coord, Blocks::GRASS_BLOCK.default_state());
                         } else if wy - height_sample as i32 >= -2 {
                             chunk.set_voxel(coord, Blocks::DIRT_BLOCK.default_state());
@@ -145,6 +159,7 @@ pub struct World<T> {
     sender: Sender<Box<Chunk>>,
 }
 
+#[allow(dead_code)]
 impl<T> World<T> {
     pub fn new(generator: T) -> Self {
         let (tx, rx) = mpsc::channel::<Box<Chunk>>();
@@ -185,14 +200,15 @@ impl<T> World<T> {
         chunk.get_voxel(local_coord)
     }
 
-    pub fn break_block(&mut self, position: WorldCoord) {
+    pub fn set_voxel(&mut self, position: WorldCoord, block: Voxel) {
+        // TODO: Remove code duplication
         let chunk_coord: ChunkCoord = position.into();
         let local_coord: ChunkLocalCoord = position.into();
 
         let chunk = self.chunks.get_mut(&chunk_coord);
 
         if let Some(chunk) = chunk {
-            chunk.set_voxel(local_coord, Blocks::AIR.default_state());
+            chunk.set_voxel(local_coord, block);
 
             if let None = local_coord.left() {
                 self.meshgen_queue
@@ -237,9 +253,15 @@ impl<T> World<T> {
             }
 
             self.meshgen_queue.lock().unwrap().push_front(chunk.coord);
-
-            log::info!("Broken block at {:?}", position);
         }
+    }
+
+    pub fn get_chunk_mut(&mut self, chunk_coord: ChunkCoord) -> Option<&mut Box<Chunk>> {
+        self.chunks.get_mut(&chunk_coord)
+    }
+
+    pub fn break_block(&mut self, position: WorldCoord) {
+        self.set_voxel(position, Blocks::AIR.default_state());
     }
 
     pub fn enqueue_chunks_around(&mut self, camera: &Camera, height: usize, distance: usize) {
@@ -275,11 +297,21 @@ impl<T> World<T> {
     }
 
     pub fn enqueue_meshgen(&mut self, coord: ChunkCoord) {
+        if !(self.chunks.contains_key(&coord.left())
+            && self.chunks.contains_key(&coord.right())
+            && self.chunks.contains_key(&coord.front())
+            && self.chunks.contains_key(&coord.back())
+            && self.chunks.contains_key(&coord.up())
+            && self.chunks.contains_key(&coord.down()))
+        {
+            return;
+        }
+
         if !self.meshed_chunks.lock().unwrap().insert(coord) {
             return;
         }
 
-        // log::debug!("Enqueued meshgen.");
+        log::debug!("Enqueued meshgen.");
         self.meshgen_queue.lock().unwrap().push_back(coord);
     }
 
@@ -339,7 +371,7 @@ impl<T> World<T> {
         &self,
         ray: Ray,
         mut debug: Option<&mut DebugDrawer>,
-    ) -> Option<(WorldCoord, Voxel)> {
+    ) -> Option<(WorldCoord, cgmath::Point3<f32>, Voxel)> {
         const MAX_DISTANCE: f32 = 32.0;
 
         let mut distance = 0.0;
@@ -350,10 +382,9 @@ impl<T> World<T> {
             let world_coord: WorldCoord = point.to_vec().into();
 
             if let Some(debug) = debug.as_mut() {
-                let world_coord_f32: cgmath::Vector3<f32> = world_coord.into();
                 debug.append_mesh(
                     ModelName::Cube,
-                    world_coord_f32 - cgmath::Vector3::new(0.05, 0.05, 0.05),
+                    point.to_vec() - cgmath::Vector3::new(0.05, 0.05, 0.05),
                     cgmath::Vector3::new(0.1, 0.1, 0.1),
                     cgmath::Vector4::new(1.0, 0.0, 1.0, 0.3),
                 );
@@ -368,7 +399,7 @@ impl<T> World<T> {
                     continue;
                 }
 
-                return Some((world_coord, voxel));
+                return Some((world_coord, point, voxel));
             }
         }
 
@@ -387,17 +418,6 @@ impl<T> World<T> {
         }
 
         if let Some(coord) = coord {
-            if !(self.chunks.contains_key(&coord.left())
-                && self.chunks.contains_key(&coord.right())
-                && self.chunks.contains_key(&coord.front())
-                && self.chunks.contains_key(&coord.back())
-                && self.chunks.contains_key(&coord.up())
-                && self.chunks.contains_key(&coord.down()))
-            {
-                self.meshed_chunks.lock().unwrap().remove(&coord);
-                return;
-            }
-
             let model = generate_model(device, bg_layout, &self.chunks[&coord], self);
 
             if let Some(model) = model {
