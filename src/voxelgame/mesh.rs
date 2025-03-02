@@ -1,10 +1,9 @@
-use std::ops::Range;
+use std::ops::{AddAssign, Range};
 
 use bytemuck::{Pod, Zeroable};
 use wgpu::util::DeviceExt;
 
 use super::draw::Drawable;
-
 pub trait Vertex: Pod + Zeroable {
     fn attribs() -> &'static [wgpu::VertexAttribute];
     fn desc() -> wgpu::VertexBufferLayout<'static> {
@@ -49,6 +48,40 @@ impl Vertex for Vertex3d {
     }
 }
 
+pub struct MeshInfo<T> {
+    pub vertices: Vec<T>,
+    pub indices: Vec<u32>,
+}
+
+impl<T> MeshInfo<T> {
+    pub fn new() -> Self {
+        Self {
+            vertices: Vec::new(),
+            indices: Vec::new(),
+        }
+    }
+
+    pub fn transform_vertices(&mut self, f: fn(v: &mut T)) {
+        self.vertices
+            .iter_mut()
+            .for_each(f);
+    }
+
+    pub fn merge(&mut self, mut rhs: Self) {
+        rhs.indices
+            .iter_mut()
+            .for_each(|i| *i += self.vertices.len() as u32);
+        self.indices.append(&mut rhs.indices);
+        self.vertices.append(&mut rhs.vertices);
+    }
+}
+
+impl<T> AddAssign for MeshInfo<T> {
+    fn add_assign(&mut self, rhs: Self) {
+        self.merge(rhs);
+    }
+}
+
 pub struct Mesh {
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
@@ -80,6 +113,10 @@ impl Mesh {
             index_buffer,
             element_count: indices.len(),
         }
+    }
+
+    pub fn from_info<T: Vertex>(device: &wgpu::Device, info: MeshInfo<T>) -> Self {
+        Self::create(device, &info.vertices, &info.indices)
     }
 
     pub fn draw_instanced(

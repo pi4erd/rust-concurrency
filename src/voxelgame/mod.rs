@@ -137,7 +137,7 @@ impl<'w> VoxelGame<'w> {
         let mut rng = rand::rng();
         let mut world = World::new(NoiseGenerator::new(rng.random_range(i32::MIN..i32::MAX)));
 
-        world.dispatch_threads(3);
+        world.dispatch_threads(5);
 
         window.set_cursor_visible(false);
         match window.set_cursor_grab(CursorGrabMode::Locked) {
@@ -682,7 +682,7 @@ impl<'w> VoxelGame<'w> {
                     timestamp_writes: None,
                     occlusion_query_set: None,
                 })
-                .forget_lifetime(); // NOTE: Reaaally hope this doesn't leak
+                .forget_lifetime();
 
             let input = self.egui_state.take_egui_input(&self.window);
 

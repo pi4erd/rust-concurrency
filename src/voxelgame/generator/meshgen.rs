@@ -1,6 +1,6 @@
 use crate::voxelgame::{
     draw::Model,
-    mesh::{Mesh, Vertex3d},
+    mesh::{Mesh, MeshInfo, Vertex3d},
 };
 
 use super::{
@@ -13,6 +13,7 @@ pub const TEXTURE_COUNT: (usize, usize) = (32, 32);
 pub const TEXTURE_UV_STEP: (f32, f32) =
     (1.0 / TEXTURE_COUNT.0 as f32, 1.0 / TEXTURE_COUNT.1 as f32);
 
+#[derive(Clone, Copy, Debug)]
 enum FaceOrientation {
     Left,
     Right,
@@ -20,6 +21,19 @@ enum FaceOrientation {
     Bottom,
     Front,
     Back,
+}
+
+impl FaceOrientation {
+    fn to_texture_id(self) -> usize {
+        match self {
+            Self::Left => 0,
+            Self::Right => 1,
+            Self::Top => 2,
+            Self::Bottom => 3,
+            Self::Back => 4,
+            Self::Front => 5,
+        }
+    }
 }
 
 const fn texture_offset(texture_id: usize) -> (f32, f32) {
@@ -270,18 +284,35 @@ fn get_voxel_wrapper<T>(coord: BlockOffsetCoord, chunk: &Chunk, world: &World<T>
     }
 }
 
-pub fn generate_model<T>(
-    device: &wgpu::Device,
-    bg_layout: &wgpu::BindGroupLayout,
+#[derive(Clone, Copy, Debug)]
+pub enum LodLevel {
+    _0,
+    _1,
+    _2,
+    _3,
+}
+
+pub fn generate_mesh_lod<T>(
     chunk: &Chunk,
     world: &World<T>,
-) -> Option<Model<Mesh>> {
+    lod_level: LodLevel,
+) -> Option<MeshInfo<Vertex3d>> {
     let mut vertices = Vec::new();
     let mut indices = Vec::new();
 
-    for x in 0..CHUNK_SIZE as i32 {
-        for y in 0..CHUNK_SIZE as i32 {
-            for z in 0..CHUNK_SIZE as i32 {
+    let step = match lod_level {
+        LodLevel::_0 => 1,
+        LodLevel::_1 => 2,
+        LodLevel::_2 => 4,
+        LodLevel::_3 => 8,
+    };
+    let scale = step as f32;
+
+    assert_eq!(CHUNK_SIZE % step, 0);
+
+    for x in (0..CHUNK_SIZE as i32).step_by(step) {
+        for y in (0..CHUNK_SIZE as i32).step_by(step) {
+            for z in (0..CHUNK_SIZE as i32).step_by(step) {
                 let coord = BlockOffsetCoord { x, y, z };
                 let current_voxel = get_voxel_wrapper(coord, chunk, world).unwrap();
                 let current_block_info = Blocks::BLOCKS[current_voxel.id as usize];
@@ -290,154 +321,58 @@ pub fn generate_model<T>(
                     continue;
                 }
 
-                // Left
-                if let Some(voxel) = get_voxel_wrapper(coord.left(), chunk, world) {
-                    let block_info = Blocks::BLOCKS[voxel.id as usize];
+                const SIDES: [FaceOrientation; 6] = [
+                    FaceOrientation::Left, FaceOrientation::Right,
+                    FaceOrientation::Top, FaceOrientation::Bottom,
+                    FaceOrientation::Back, FaceOrientation::Front,
+                ];
 
-                    if block_info.transparent {
-                        let (vx, idx) = face(
-                            current_block_info.texture_ids[0],
-                            (x as usize, y as usize, z as usize),
-                            FaceOrientation::Left,
+                for side in SIDES {
+                    let coord = match side {
+                        FaceOrientation::Left => coord.left(),
+                        FaceOrientation::Right => coord.right(),
+                        FaceOrientation::Top => coord.up(),
+                        FaceOrientation::Bottom => coord.down(),
+                        FaceOrientation::Back => coord.back(),
+                        FaceOrientation::Front => coord.front(),
+                    };
+
+                    if let Some(voxel) = get_voxel_wrapper(coord, chunk, world) {
+                        let block_info = Blocks::BLOCKS[voxel.id as usize];
+
+                        if block_info.transparent {
+                            let (mut vx, idx) = face(
+                                current_block_info.texture_ids[side.to_texture_id()],
+                                (x as usize / step, y as usize / step, z as usize / step),
+                                side,
+                            );
+                            idx.into_iter()
+                                .for_each(|i| indices.push(i + vertices.len() as u32));
+                            vx.iter_mut()
+                                .for_each(|v| {
+                                    v.position[0] *= scale;
+                                    v.position[1] *= scale;
+                                    v.position[2] *= scale;
+                                });
+                            vx.into_iter()
+                                .for_each(|v| vertices.push(v));
+                        }
+                    } else {
+                        let (mut vx, idx) = face(
+                            current_block_info.texture_ids[side.to_texture_id()],
+                            (x as usize / step, y as usize / step, z as usize / step),
+                            side,
                         );
                         idx.into_iter()
                             .for_each(|i| indices.push(i + vertices.len() as u32));
+                        vx.iter_mut()
+                            .for_each(|v| {
+                                v.position[0] *= scale;
+                                v.position[1] *= scale;
+                                v.position[2] *= scale;
+                            });
                         vx.into_iter().for_each(|v| vertices.push(v));
                     }
-                } else {
-                    let (vx, idx) = face(
-                        current_block_info.texture_ids[0],
-                        (x as usize, y as usize, z as usize),
-                        FaceOrientation::Left,
-                    );
-                    idx.into_iter()
-                        .for_each(|i| indices.push(i + vertices.len() as u32));
-                    vx.into_iter().for_each(|v| vertices.push(v));
-                }
-
-                // Right
-                if let Some(voxel) = get_voxel_wrapper(coord.right(), chunk, world) {
-                    let block_info = Blocks::BLOCKS[voxel.id as usize];
-
-                    if block_info.transparent {
-                        let (vx, idx) = face(
-                            current_block_info.texture_ids[1],
-                            (x as usize, y as usize, z as usize),
-                            FaceOrientation::Right,
-                        );
-                        idx.into_iter()
-                            .for_each(|i| indices.push(i + vertices.len() as u32));
-                        vx.into_iter().for_each(|v| vertices.push(v));
-                    }
-                } else {
-                    let (vx, idx) = face(
-                        current_block_info.texture_ids[1],
-                        (x as usize, y as usize, z as usize),
-                        FaceOrientation::Right,
-                    );
-                    idx.into_iter()
-                        .for_each(|i| indices.push(i + vertices.len() as u32));
-                    vx.into_iter().for_each(|v| vertices.push(v));
-                }
-
-                // Top
-                if let Some(voxel) = get_voxel_wrapper(coord.up(), chunk, world) {
-                    let block_info = Blocks::BLOCKS[voxel.id as usize];
-
-                    if block_info.transparent {
-                        let (vx, idx) = face(
-                            current_block_info.texture_ids[2],
-                            (x as usize, y as usize, z as usize),
-                            FaceOrientation::Top,
-                        );
-                        idx.into_iter()
-                            .for_each(|i| indices.push(i + vertices.len() as u32));
-                        vx.into_iter().for_each(|v| vertices.push(v));
-                    }
-                } else {
-                    let (vx, idx) = face(
-                        current_block_info.texture_ids[2],
-                        (x as usize, y as usize, z as usize),
-                        FaceOrientation::Top,
-                    );
-                    idx.into_iter()
-                        .for_each(|i| indices.push(i + vertices.len() as u32));
-                    vx.into_iter().for_each(|v| vertices.push(v));
-                }
-
-                // Bottom
-                if let Some(voxel) = get_voxel_wrapper(coord.down(), chunk, world) {
-                    let block_info = Blocks::BLOCKS[voxel.id as usize];
-
-                    if block_info.transparent {
-                        let (vx, idx) = face(
-                            current_block_info.texture_ids[3],
-                            (x as usize, y as usize, z as usize),
-                            FaceOrientation::Bottom,
-                        );
-                        idx.into_iter()
-                            .for_each(|i| indices.push(i + vertices.len() as u32));
-                        vx.into_iter().for_each(|v| vertices.push(v));
-                    }
-                } else {
-                    let (vx, idx) = face(
-                        current_block_info.texture_ids[3],
-                        (x as usize, y as usize, z as usize),
-                        FaceOrientation::Bottom,
-                    );
-                    idx.into_iter()
-                        .for_each(|i| indices.push(i + vertices.len() as u32));
-                    vx.into_iter().for_each(|v| vertices.push(v));
-                }
-
-                // Front
-                if let Some(voxel) = get_voxel_wrapper(coord.front(), chunk, world) {
-                    let block_info = Blocks::BLOCKS[voxel.id as usize];
-
-                    if block_info.transparent {
-                        let (vx, idx) = face(
-                            current_block_info.texture_ids[4],
-                            (x as usize, y as usize, z as usize),
-                            FaceOrientation::Front,
-                        );
-                        idx.into_iter()
-                            .for_each(|i| indices.push(i + vertices.len() as u32));
-                        vx.into_iter().for_each(|v| vertices.push(v));
-                    }
-                } else {
-                    let (vx, idx) = face(
-                        current_block_info.texture_ids[4],
-                        (x as usize, y as usize, z as usize),
-                        FaceOrientation::Front,
-                    );
-                    idx.into_iter()
-                        .for_each(|i| indices.push(i + vertices.len() as u32));
-                    vx.into_iter().for_each(|v| vertices.push(v));
-                }
-
-                // Back
-                if let Some(voxel) = get_voxel_wrapper(coord.back(), chunk, world) {
-                    let block_info = Blocks::BLOCKS[voxel.id as usize];
-
-                    if block_info.transparent {
-                        let (vx, idx) = face(
-                            current_block_info.texture_ids[5],
-                            (x as usize, y as usize, z as usize),
-                            FaceOrientation::Back,
-                        );
-                        idx.into_iter()
-                            .for_each(|i| indices.push(i + vertices.len() as u32));
-                        vx.into_iter().for_each(|v| vertices.push(v));
-                    }
-                } else {
-                    let (vx, idx) = face(
-                        current_block_info.texture_ids[5],
-                        (x as usize, y as usize, z as usize),
-                        FaceOrientation::Back,
-                    );
-                    idx.into_iter()
-                        .for_each(|i| indices.push(i + vertices.len() as u32));
-                    vx.into_iter().for_each(|v| vertices.push(v));
                 }
             }
         }
@@ -447,7 +382,21 @@ pub fn generate_model<T>(
         return None;
     }
 
-    let mut model = Model::new(bg_layout, device, Mesh::create(device, &vertices, &indices));
+    Some(MeshInfo {
+        vertices,
+        indices,
+    })
+}
+
+pub fn generate_model<T>(
+    device: &wgpu::Device,
+    bg_layout: &wgpu::BindGroupLayout,
+    chunk: &Chunk,
+    world: &World<T>,
+) -> Option<Model<Mesh>> {
+    let mesh_info = generate_mesh_lod(chunk, world, LodLevel::_0)?;
+
+    let mut model = Model::new(bg_layout, device, Mesh::from_info(device, mesh_info));
     model.position = chunk.coord.into();
 
     Some(model)

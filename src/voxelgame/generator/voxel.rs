@@ -11,6 +11,14 @@ pub struct RegisteredBlock {
     pub name: &'static str,
     pub transparent: bool,
     pub solid: bool,
+
+    // IDs in order:
+    // 0: left
+    // 1: right
+    // 2: top
+    // 3: bottom
+    // 4: back
+    // 5: front
     pub texture_ids: [usize; 6],
     default_state: Voxel,
 }
