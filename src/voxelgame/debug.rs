@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 
 use bytemuck::{Pod, Zeroable};
+use cgmath::Point2;
 
-use super::{
-    draw::Drawable,
-    mesh::{Instance, Mesh, Vertex},
-};
+use crate::voxelgame::font::{Text, TextQueue};
+
+use super::mesh::{Instance, Mesh, Vertex};
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
@@ -54,12 +54,14 @@ pub enum ModelName {
 
 pub struct DebugDrawer {
     meshes: HashMap<ModelName, Mesh>,
+    debug_text: HashMap<&'static str, String>,
     instances: HashMap<ModelName, Vec<DebugModelInstance>>,
     instance_buffer: wgpu::Buffer,
 }
 
 impl DebugDrawer {
     pub const INSTANCE_LIMIT: usize = 100000;
+    const FONT_SIZE: f32 = 24.0;
 
     pub fn new(device: &wgpu::Device) -> Self {
         let mut meshes = HashMap::new();
@@ -78,6 +80,7 @@ impl DebugDrawer {
 
         Self {
             meshes,
+            debug_text: HashMap::new(),
             instances,
             instance_buffer,
         }
@@ -110,7 +113,11 @@ impl DebugDrawer {
         self.instances.get_mut(&model).unwrap().push(instance);
     }
 
-    pub fn update_buffer(&self, queue: &wgpu::Queue) {
+    pub fn set_text(&mut self, id: &'static str, text: String) {
+        _ = self.debug_text.insert(id, text);
+    }
+
+    pub fn update_buffer(&self, text_queue: &mut TextQueue, queue: &wgpu::Queue) {
         let mut offset = 0;
         // NOTE: Consider using queue.write_buffer_with
         for (_, instances) in self.instances.iter() {
@@ -120,6 +127,16 @@ impl DebugDrawer {
                 bytemuck::cast_slice(&instances),
             );
             offset += instances.len() * std::mem::size_of::<DebugModelInstance>();
+        }
+
+        let mut offset = 24.0; // margin 6.0
+        for text in self.debug_text.iter() {
+            text_queue.push_text(Text::new(
+                Point2::new(24.0, offset),
+                Self::FONT_SIZE,
+                text.1.clone(),
+            ));
+            offset += Self::FONT_SIZE + 6.0;
         }
     }
 
@@ -174,10 +191,8 @@ impl DebugDrawer {
             ],
         )
     }
-}
 
-impl Drawable for DebugDrawer {
-    fn draw(&self, render_pass: &mut wgpu::RenderPass) {
+    pub fn draw_3d(&self, render_pass: &mut wgpu::RenderPass) {
         let mut offset = 0;
         for (model, instances) in self.instances.iter() {
             let mesh = &self.meshes[&model];

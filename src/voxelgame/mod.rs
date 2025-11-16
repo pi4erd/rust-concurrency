@@ -5,13 +5,13 @@ mod generator;
 mod mesh;
 mod tests;
 mod texture;
+mod font;
 
 use std::{collections::HashMap, sync::Arc, time::Instant};
 
 use camera::{Camera, CameraController};
 use cgmath::{EuclideanSpace, InnerSpace};
 use debug::{DebugDrawer, DebugModelInstance, DebugVertex};
-use draw::Drawable;
 use generator::{chunk::BlockOffsetCoord, voxel::Blocks, NoiseGenerator, Ray, World};
 use mesh::{Instance, Vertex, Vertex3d};
 use pollster::FutureExt;
@@ -25,7 +25,7 @@ use winit::{
     window::{CursorGrabMode, Window},
 };
 
-use crate::window::Game;
+use crate::{voxelgame::font::TextQueue, window::Game};
 
 #[allow(dead_code)]
 pub struct VoxelGame<'w> {
@@ -37,6 +37,7 @@ pub struct VoxelGame<'w> {
     adapter: wgpu::Adapter,
     device: wgpu::Device,
     queue: wgpu::Queue,
+    text_queue: TextQueue<'w>,
 
     start_time: std::time::Instant,
     prev_time: f32,
@@ -89,6 +90,7 @@ impl<'w> VoxelGame<'w> {
                     required_features: wgpu::Features::POLYGON_MODE_LINE,
                     required_limits: wgpu::Limits::default(),
                     trace: wgpu::Trace::Off,
+                    experimental_features: wgpu::ExperimentalFeatures::disabled(),
                 },
             )
             .await
@@ -114,6 +116,15 @@ impl<'w> VoxelGame<'w> {
             view_formats: vec![],
         };
         surface.configure(&device, &surface_config);
+
+        // TODO: Asset management system
+        let text_queue = TextQueue::new(
+            &device,
+            &surface_config,
+
+            // Thanks to JetBrains for creating this beautiful font, for free
+            include_bytes!("../../assets/fonts/JetBrainsMono-Regular.ttf")
+        ).expect("Failed to create TextQueue");
 
         let camera = Camera::new(size.width as f32 / size.height as f32);
         let camera_controller = CameraController::new(5.0, 0.003);
@@ -150,6 +161,7 @@ impl<'w> VoxelGame<'w> {
             adapter,
             device,
             queue,
+            text_queue,
 
             depth_texture, // TODO: Move depth texture to textures hashmap
             world,
@@ -484,9 +496,9 @@ impl<'w> VoxelGame<'w> {
         self.update_uniform_buffers();
 
         self.debug.new_frame();
-        // self.world.append_debug(
-        //     &mut self.debug,
-        // );
+        self.world.append_debug(
+            &mut self.debug,
+        );
 
         let hit = self.world.ray_hit(
             Ray {
@@ -526,7 +538,7 @@ impl<'w> VoxelGame<'w> {
             );
         }
 
-        self.debug.update_buffer(&self.queue);
+        self.debug.update_buffer(&mut self.text_queue, &self.queue);
     }
 
     fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
@@ -540,7 +552,7 @@ impl<'w> VoxelGame<'w> {
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
 
-        {
+        { // 0
             let mut sky_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -550,6 +562,7 @@ impl<'w> VoxelGame<'w> {
                         load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
                         store: wgpu::StoreOp::Store,
                     },
+                    depth_slice: None,
                 })],
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
@@ -564,7 +577,7 @@ impl<'w> VoxelGame<'w> {
         }
 
         let _chunks_drawn;
-        {
+        { // 1
             let mut opaque_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -574,6 +587,7 @@ impl<'w> VoxelGame<'w> {
                         load: wgpu::LoadOp::Load,
                         store: wgpu::StoreOp::Store,
                     },
+                    depth_slice: None,
                 })],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                     view: &self.depth_texture.view,
@@ -595,9 +609,9 @@ impl<'w> VoxelGame<'w> {
             _chunks_drawn = self
                 .world
                 .draw_distance(&mut opaque_pass, self.camera.eye.to_vec(), 8);
-        }
+        } 
 
-        if self.draw_debug {
+        if self.draw_debug { // 2
             let mut debug_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -607,6 +621,7 @@ impl<'w> VoxelGame<'w> {
                         load: wgpu::LoadOp::Load,
                         store: wgpu::StoreOp::Store,
                     },
+                    depth_slice: None,
                 })],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                     view: &self.depth_texture.view,
@@ -624,7 +639,29 @@ impl<'w> VoxelGame<'w> {
 
             debug_pass.set_bind_group(0, &self.bind_groups["camera"], &[]);
 
-            self.debug.draw(&mut debug_pass);
+            self.debug.draw_3d(&mut debug_pass);
+        }
+        
+        { // 3
+            let mut ui_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("ui_pass"),
+                color_attachments: &[
+                    Some(wgpu::RenderPassColorAttachment {
+                        view: &view,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: wgpu::StoreOp::Store,
+                        },
+                        resolve_target: None,
+                        depth_slice: None,
+                    })
+                ],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+
+            self.text_queue.draw(&self.device, &self.queue, &mut ui_pass);
         }
 
         self.queue.submit([encoder.finish()]);
@@ -649,6 +686,7 @@ impl<'w> VoxelGame<'w> {
             &self.surface_config,
             Some("depth_texture"),
         );
+        self.text_queue.resize(&self.queue, new_size);
     }
 }
 

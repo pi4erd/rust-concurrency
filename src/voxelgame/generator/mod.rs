@@ -581,5 +581,16 @@ impl<T> World<T> {
                 [1.0, 0.0, 1.0, 0.0].into(),
             );
         }
+
+        let meshgen_queue_text = format!(
+            "Meshgen Queue size: {}",
+            self.meshgen_queue.lock().unwrap().len(),
+        );
+        let chunk_queue_text = format!(
+            "Chunk Queue size: {}",
+            self.chunk_gen_queue.lock().unwrap().len(),
+        );
+        debug.set_text("world.meshgen_queue_size", meshgen_queue_text);
+        debug.set_text("world.worldgen_queue_size", chunk_queue_text);
     }
 }
