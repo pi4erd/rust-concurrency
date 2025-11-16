@@ -18,7 +18,7 @@ use chunk::{Chunk, ChunkCoord, ChunkLocalCoord, WorldCoord, CHUNK_SIZE};
 use rand::Rng;
 use voxel::{Blocks, Voxel};
 
-use crate::voxelgame::{generator::meshgen::generate_mesh_lod, mesh::{MeshInfo, Vertex3d}};
+use crate::voxelgame::{generator::{chunk::BlockOffsetCoord, meshgen::generate_mesh_lod}, mesh::{MeshInfo, Vertex3d}};
 
 use super::{
     camera::Camera,
@@ -237,6 +237,71 @@ impl<T> World<T> {
         let lock = &self.chunks.lock().unwrap();
         let chunk = &lock.get(&chunk_coord)?;
         chunk.get_voxel(local_coord)
+    }
+    
+    pub fn set_voxels_radius(&mut self, center: WorldCoord, radius: u32, block: Voxel) {
+        let mut chunks_affected: HashSet<ChunkCoord> = HashSet::new();
+        let radius = radius as i32;
+
+        let mut lock = self.chunks.lock().unwrap();
+
+        for i in -radius..radius {
+            for j in -radius..radius {
+                for k in -radius..radius {
+                    let offset_float = (i as f32, j as f32, k as f32);
+                    let dst_float = (
+                        offset_float.0 * offset_float.0 +
+                        offset_float.1 * offset_float.1 +
+                        offset_float.2 * offset_float.2
+                    ).sqrt();
+
+                    if dst_float > radius as f32 { continue; }
+
+                    let offset = BlockOffsetCoord {
+                        x: i, y: j, z: k,
+                    };
+                    let world_coord = center + offset;
+                    let chunk_coord: ChunkCoord = world_coord.into();
+                    let local_coord: ChunkLocalCoord = world_coord.into();                    
+                    let chunk = lock.get_mut(&chunk_coord);
+
+                    if let Some(chunk) = chunk {
+                        chunk.set_voxel(local_coord, block);
+
+                        if local_coord.left().is_none() {
+                            chunks_affected.insert(chunk_coord.left());
+                        }
+
+                        if local_coord.right().is_none() {
+                            chunks_affected.insert(chunk_coord.right());
+                        }
+
+                        if local_coord.up().is_none() {
+                            chunks_affected.insert(chunk_coord.up());
+                        }
+
+                        if local_coord.down().is_none() {
+                            chunks_affected.insert(chunk_coord.down());
+                        }
+
+                        if local_coord.front().is_none() {
+                            chunks_affected.insert(chunk_coord.front());
+                        }
+
+                        if local_coord.back().is_none() {
+                            chunks_affected.insert(chunk_coord.back());
+                        }
+
+                        chunks_affected.insert(chunk_coord);
+                    }
+                }
+            }
+        }
+
+        let mut lock = self.meshgen_queue.lock().unwrap();
+        for coord in chunks_affected {
+            lock.push_front(coord);
+        }
     }
 
     pub fn set_voxel(&mut self, position: WorldCoord, block: Voxel) {

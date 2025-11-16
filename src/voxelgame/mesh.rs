@@ -3,9 +3,8 @@ use std::ops::{AddAssign, Range};
 use bytemuck::{Pod, Zeroable};
 use wgpu::util::DeviceExt;
 
-use crate::voxelgame::generator::chunk::ChunkCoord;
-
 use super::draw::Drawable;
+
 pub trait Vertex: Pod + Zeroable {
     fn attribs() -> &'static [wgpu::VertexAttribute];
     fn desc() -> wgpu::VertexBufferLayout<'static> {

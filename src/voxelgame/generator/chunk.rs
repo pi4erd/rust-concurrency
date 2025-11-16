@@ -8,6 +8,7 @@ use super::voxel::{Blocks, Voxel};
 pub const CHUNK_SIZE: usize = 32;
 const CHUNK_SIZE_ITEMS: usize = CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE;
 
+/// Absolute block coordinate in world space
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Hash)]
 pub struct WorldCoord {
     pub x: i32,
@@ -112,6 +113,7 @@ impl From<cgmath::Vector3<f32>> for WorldCoord {
     }
 }
 
+/// Relative block coordinates in world space
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Hash)]
 pub struct BlockOffsetCoord {
     pub x: i32,
@@ -189,6 +191,7 @@ impl From<cgmath::Vector3<f32>> for BlockOffsetCoord {
     }
 }
 
+/// Coordinate local to the chunk, cannot exceed chunk size
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Hash)]
 pub struct ChunkLocalCoord {
     pub x: usize,
@@ -285,6 +288,7 @@ impl From<WorldCoord> for ChunkLocalCoord {
     }
 }
 
+/// Chunk coordinate, relative to other chunks
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Hash)]
 pub struct ChunkCoord {
     pub x: i32,
@@ -435,7 +439,7 @@ impl Chunk {
     }
 
     #[inline(always)]
-    fn translate_index(coord: ChunkLocalCoord) -> usize {
+    const fn translate_index(coord: ChunkLocalCoord) -> usize {
         coord.x + coord.y * CHUNK_SIZE + (coord.z * CHUNK_SIZE * CHUNK_SIZE)
     }
 

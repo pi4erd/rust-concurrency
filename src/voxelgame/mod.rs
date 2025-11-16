@@ -53,10 +53,6 @@ pub struct VoxelGame<'w> {
     camera: Camera,
     camera_controller: CameraController,
 
-    // egui_context: egui::Context,
-    // egui_state: egui_winit::State,
-    // egui_renderer: egui_wgpu::Renderer,
-
     generate: bool,
     draw_debug: bool,
     cursor_locked: bool,
@@ -145,25 +141,6 @@ impl<'w> VoxelGame<'w> {
             Err(e) => log::error!("No cursor lock available: {e}")
         }
 
-        // Setup EGUI
-
-        // let egui_context = egui::Context::default();
-        // let egui_state = egui_winit::State::new(
-        //     egui_context.clone(),
-        //     egui::ViewportId(egui::Id::new("viewport")),
-        //     &window,
-        //     None,
-        //     None,
-        //     None,
-        // );
-        // let egui_renderer = egui_wgpu::Renderer::new(
-        //     &device,
-        //     surface_config.format,
-        //     Some(Texture2d::DEPTH_FORMAT),
-        //     1,
-        //     false,
-        // );
-
         Self {
             window,
 
@@ -188,10 +165,6 @@ impl<'w> VoxelGame<'w> {
             textures,
             camera,
             camera_controller,
-
-            // egui_state,
-            // egui_context,
-            // egui_renderer,
 
             generate: true,
             draw_debug: false,
@@ -500,7 +473,7 @@ impl<'w> VoxelGame<'w> {
         self.camera_controller.update(&mut self.camera, delta);
 
         if self.generate {
-            self.world.enqueue_chunks_around(&self.camera, 16, 14);
+            self.world.enqueue_chunks_around(&self.camera, 5, 6);
         }
 
         self.world.receive_chunk();
@@ -690,11 +663,6 @@ impl<'w> Game for VoxelGame<'w> {
         _window_id: winit::window::WindowId,
         event: winit::event::WindowEvent,
     ) {
-        // let egui_response = self.egui_state.on_window_event(&self.window, &event);
-        // if egui_response.consumed {
-        //     return;
-        // }
-
         self.camera_controller.process_window_events(&event);
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
@@ -734,7 +702,11 @@ impl<'w> Game for VoxelGame<'w> {
                             );
 
                             if let Some((world_coord, _, _)) = hit {
-                                self.world.break_block(world_coord);
+                                self.world.set_voxels_radius(
+                                    world_coord,
+                                    10,
+                                    Blocks::AIR.default_state()
+                                );
                             }
                         }
                         winit::event::MouseButton::Right => {
