@@ -3,6 +3,8 @@ use std::ops::{AddAssign, Range};
 use bytemuck::{Pod, Zeroable};
 use wgpu::util::DeviceExt;
 
+use crate::voxelgame::generator::chunk::ChunkCoord;
+
 use super::draw::Drawable;
 pub trait Vertex: Pod + Zeroable {
     fn attribs() -> &'static [wgpu::VertexAttribute];
@@ -61,6 +63,7 @@ impl<T> MeshInfo<T> {
         }
     }
 
+    #[deprecated = "Don't use"]
     pub fn transform_vertices(&mut self, f: fn(v: &mut T)) {
         self.vertices
             .iter_mut()

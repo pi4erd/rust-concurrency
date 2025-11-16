@@ -5,7 +5,7 @@ use std::{
 
 use super::voxel::{Blocks, Voxel};
 
-pub const CHUNK_SIZE: usize = 40;
+pub const CHUNK_SIZE: usize = 32;
 const CHUNK_SIZE_ITEMS: usize = CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Hash)]
@@ -120,52 +120,51 @@ pub struct BlockOffsetCoord {
 }
 
 impl BlockOffsetCoord {
-    // Optional because can go outside of chunk
-    pub fn left(self) -> Self {
+    pub fn left(self, step: i32) -> Self {
         Self {
-            x: self.x - 1,
+            x: self.x - step,
             y: self.y,
             z: self.z,
         }
     }
 
-    pub fn right(self) -> Self {
+    pub fn right(self, step: i32) -> Self {
         Self {
-            x: self.x + 1,
+            x: self.x + step,
             y: self.y,
             z: self.z,
         }
     }
 
-    pub fn up(self) -> Self {
+    pub fn up(self, step: i32) -> Self {
         Self {
             x: self.x,
-            y: self.y + 1,
+            y: self.y + step,
             z: self.z,
         }
     }
 
-    pub fn down(self) -> Self {
+    pub fn down(self, step: i32) -> Self {
         Self {
             x: self.x,
-            y: self.y - 1,
+            y: self.y - step,
             z: self.z,
         }
     }
 
-    pub fn front(self) -> Self {
+    pub fn front(self, step: i32) -> Self {
         Self {
             x: self.x,
             y: self.y,
-            z: self.z - 1,
+            z: self.z - step,
         }
     }
 
-    pub fn back(self) -> Self {
+    pub fn back(self, step: i32) -> Self {
         Self {
             x: self.x,
             y: self.y,
-            z: self.z + 1,
+            z: self.z + step,
         }
     }
 }
@@ -288,9 +287,9 @@ impl From<WorldCoord> for ChunkLocalCoord {
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Hash)]
 pub struct ChunkCoord {
-    pub x: i16,
-    pub y: i16,
-    pub z: i16,
+    pub x: i32,
+    pub y: i32,
+    pub z: i32,
 }
 
 impl Neg for ChunkCoord {
@@ -390,9 +389,9 @@ impl From<WorldCoord> for ChunkCoord {
         let chunk_z = coord.z / CHUNK_SIZE as i32 - if neg_z { 1 } else { 0 };
 
         Self {
-            x: chunk_x as i16,
-            y: chunk_y as i16,
-            z: chunk_z as i16,
+            x: chunk_x as i32,
+            y: chunk_y as i32,
+            z: chunk_z as i32,
         }
     }
 }

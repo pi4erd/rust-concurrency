@@ -15,9 +15,10 @@ use cgmath::{EuclideanSpace, MetricSpace};
 use fastnoise_lite::FastNoiseLite;
 
 use chunk::{Chunk, ChunkCoord, ChunkLocalCoord, WorldCoord, CHUNK_SIZE};
-use meshgen::generate_model;
 use rand::Rng;
 use voxel::{Blocks, Voxel};
+
+use crate::voxelgame::{generator::meshgen::generate_mesh_lod, mesh::{MeshInfo, Vertex3d}};
 
 use super::{
     camera::Camera,
@@ -120,7 +121,7 @@ impl Generator for NoiseGenerator {
                                             y: coord.y + k,
                                             z: coord.z,
                                         },
-                                        Blocks::DIRT_BLOCK.default_state()
+                                        Blocks::LOG.default_state()
                                     );
                                 }
                             }
@@ -144,38 +145,75 @@ pub struct Ray {
 
 type Queue<T> = VecDeque<T>;
 
+#[derive(Clone)]
+pub struct WorldAccessor {
+    pub chunks: Arc<Mutex<HashMap<ChunkCoord, Box<Chunk>>>>,
+}
+
+impl WorldAccessor {
+    pub fn get_voxel(
+        &self,
+        coord: WorldCoord,
+    ) -> Option<Voxel> {
+        let chunk_coord: ChunkCoord = coord.into();
+        let local_coord: ChunkLocalCoord = coord.into();
+
+        let lock = &self.chunks.lock().unwrap();
+        let chunk = &lock.get(&chunk_coord)?;
+        chunk.get_voxel(local_coord)
+    }
+}
+
 pub struct World<T> {
     generator: Arc<T>,
-    chunks: HashMap<ChunkCoord, Box<Chunk>>,
+    chunks: Arc<Mutex<HashMap<ChunkCoord, Box<Chunk>>>>,
+    world_accessor: WorldAccessor,
     models: HashMap<ChunkCoord, Model<Mesh>>,
 
     chunk_gen_queue: Arc<Mutex<Queue<ChunkCoord>>>,
     meshgen_queue: Arc<Mutex<Queue<ChunkCoord>>>,
+
     world_gen_threads: Vec<JoinHandle<()>>,
+    meshgen_threads: Vec<JoinHandle<()>>,
+
     loaded_chunks: Arc<Mutex<HashSet<ChunkCoord>>>,
     meshed_chunks: Arc<Mutex<HashSet<ChunkCoord>>>,
 
-    receiver: Receiver<Box<Chunk>>,
-    sender: Sender<Box<Chunk>>,
+    chunk_receiver: Receiver<Box<Chunk>>,
+    chunk_sender: Sender<Box<Chunk>>,
+    mesh_receiver: Receiver<(ChunkCoord, MeshInfo<Vertex3d>)>,
+    mesh_sender: Sender<(ChunkCoord, MeshInfo<Vertex3d>)>,
 }
 
 #[allow(dead_code)]
 impl<T> World<T> {
     pub fn new(generator: T) -> Self {
-        let (tx, rx) = mpsc::channel::<Box<Chunk>>();
+        let (ctx, crx) = mpsc::channel::<Box<Chunk>>();
+        let (mtx, mrx) = mpsc::channel::<(ChunkCoord, MeshInfo<Vertex3d>)>();
+
+        let chunks = Arc::new(Mutex::new(HashMap::new()));
+        let world_accessor = WorldAccessor { chunks: chunks.clone() };
+
         Self {
             generator: Arc::new(generator),
-            chunks: HashMap::new(),
+            chunks,
+            world_accessor,
+            
             models: HashMap::new(),
             chunk_gen_queue: Arc::new(Mutex::new(Queue::new())),
 
             meshgen_queue: Arc::new(Mutex::new(Queue::new())),
+
             world_gen_threads: Vec::new(),
+            meshgen_threads: Vec::new(),
+
             loaded_chunks: Arc::new(Mutex::new(HashSet::new())),
             meshed_chunks: Arc::new(Mutex::new(HashSet::new())),
 
-            receiver: rx,
-            sender: tx,
+            chunk_receiver: crx,
+            chunk_sender: ctx,
+            mesh_receiver: mrx,
+            mesh_sender: mtx,
         }
     }
 
@@ -188,7 +226,7 @@ impl<T> World<T> {
         genqueue.clear();
         meshqueue.clear();
 
-        self.chunks.clear();
+        self.chunks.lock().unwrap().clear();
         self.models.clear();
     }
 
@@ -196,7 +234,8 @@ impl<T> World<T> {
         let chunk_coord: ChunkCoord = position.into();
         let local_coord: ChunkLocalCoord = position.into();
 
-        let chunk = &self.chunks.get(&chunk_coord)?;
+        let lock = &self.chunks.lock().unwrap();
+        let chunk = &lock.get(&chunk_coord)?;
         chunk.get_voxel(local_coord)
     }
 
@@ -205,7 +244,9 @@ impl<T> World<T> {
         let chunk_coord: ChunkCoord = position.into();
         let local_coord: ChunkLocalCoord = position.into();
 
-        let chunk = self.chunks.get_mut(&chunk_coord);
+        let mut lock = self.chunks.lock().unwrap();
+
+        let chunk = lock.get_mut(&chunk_coord);
 
         if let Some(chunk) = chunk {
             chunk.set_voxel(local_coord, block);
@@ -256,10 +297,6 @@ impl<T> World<T> {
         }
     }
 
-    pub fn get_chunk_mut(&mut self, chunk_coord: ChunkCoord) -> Option<&mut Box<Chunk>> {
-        self.chunks.get_mut(&chunk_coord)
-    }
-
     pub fn break_block(&mut self, position: WorldCoord) {
         self.set_voxel(position, Blocks::AIR.default_state());
     }
@@ -276,9 +313,9 @@ impl<T> World<T> {
                 for k in -distance..=distance {
                     let chunk = center
                         + ChunkCoord {
-                            x: k as i16,
-                            y: i as i16,
-                            z: j as i16,
+                            x: k as i32,
+                            y: i as i32,
+                            z: j as i32,
                         };
 
                     self.enqueue_chunk(chunk);
@@ -297,12 +334,13 @@ impl<T> World<T> {
     }
 
     pub fn enqueue_meshgen(&mut self, coord: ChunkCoord) {
-        if !(self.chunks.contains_key(&coord.left())
-            && self.chunks.contains_key(&coord.right())
-            && self.chunks.contains_key(&coord.front())
-            && self.chunks.contains_key(&coord.back())
-            && self.chunks.contains_key(&coord.up())
-            && self.chunks.contains_key(&coord.down()))
+        let lock = self.chunks.lock().unwrap();
+        if !(lock.contains_key(&coord.left())
+            && lock.contains_key(&coord.right())
+            && lock.contains_key(&coord.front())
+            && lock.contains_key(&coord.back())
+            && lock.contains_key(&coord.up())
+            && lock.contains_key(&coord.down()))
         {
             return;
         }
@@ -323,12 +361,12 @@ impl<T> World<T> {
         self.meshgen_queue.lock().unwrap().len()
     }
 
-    pub fn dispatch_threads(&mut self, worldgen: usize)
+    pub fn dispatch_threads(&mut self, worldgen: usize, meshgen: usize)
     where
         T: 'static + Generator,
     {
         for _ in 0..worldgen {
-            let tx = self.sender.clone();
+            let tx = self.chunk_sender.clone();
             let chunk_gen_queue = self.chunk_gen_queue.clone();
             let generator = self.generator.clone();
             self.world_gen_threads.push(thread::spawn(move || {
@@ -344,8 +382,28 @@ impl<T> World<T> {
 
                         log::debug!("Generated chunk {}", chunk_to_generate);
 
-                        // NOTE: Previous issue here is fixed by Box
                         tx.send(chunk).expect("Channel was closed");
+                    }
+                }
+            }));
+        }
+
+        for _ in 0..meshgen {
+            let mesh_gen_queue = self.meshgen_queue.clone();
+            let world_accessor = self.world_accessor.clone();
+            let tx = self.mesh_sender.clone();
+            self.meshgen_threads.push(thread::spawn(move || {
+                loop {
+                    let coord: Option<ChunkCoord> = mesh_gen_queue.lock().unwrap().pop_front();
+
+                    if let Some(mesh_to_gen) = coord {
+                        let chunk = world_accessor.chunks.lock().unwrap()[&mesh_to_gen].clone();
+                        let mesh = generate_mesh_lod(chunk, world_accessor.clone(), meshgen::LodLevel::_0);
+                        log::debug!("Finished meshing {}!", mesh_to_gen);
+
+                        if let Some(mesh) = mesh {
+                            tx.send((mesh_to_gen, mesh)).unwrap();
+                        }
                     }
                 }
             }));
@@ -353,12 +411,12 @@ impl<T> World<T> {
     }
 
     pub fn receive_chunk(&mut self) {
-        let recv_iterator = self.receiver.try_iter();
+        let recv_iterator = self.chunk_receiver.try_iter();
         let mut coords_to_mesh = Vec::new();
 
         for chunk in recv_iterator {
             let coord = chunk.coord;
-            self.chunks.insert(coord, chunk);
+            self.chunks.lock().unwrap().insert(coord, chunk);
             coords_to_mesh.push(coord);
         }
 
@@ -408,22 +466,19 @@ impl<T> World<T> {
 
     pub fn dequeue_meshgen(
         &mut self,
+        limit: usize,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         bg_layout: &wgpu::BindGroupLayout,
     ) {
-        let coord: Option<ChunkCoord>;
-        {
-            coord = self.meshgen_queue.lock().unwrap().pop_front();
-        }
+        for (i, (coord, mesh)) in self.mesh_receiver.try_iter().enumerate() {
+            log::debug!("Received mesh for chunk {}", coord);
+            let mut model = Model::new(bg_layout, device, Mesh::from_info(device, mesh));
+            model.position = coord.into();
+            _ = self.models.insert(coord, model);
+            self.models[&coord].update_buffer(queue);
 
-        if let Some(coord) = coord {
-            let model = generate_model(device, bg_layout, &self.chunks[&coord], self);
-
-            if let Some(model) = model {
-                _ = self.models.insert(coord, model);
-                self.models[&coord].update_buffer(queue);
-            }
+            if i >= limit { break; }
         }
     }
 

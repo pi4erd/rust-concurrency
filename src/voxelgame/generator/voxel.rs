@@ -1,6 +1,6 @@
 type VoxelId = u8;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct Voxel {
     pub id: VoxelId,
 }
@@ -32,6 +32,9 @@ impl RegisteredBlock {
 pub struct Blocks;
 
 impl Blocks {
+    // TODO: Simplify Block registry
+    // TODO: Add an API to interface with it
+
     pub const AIR: RegisteredBlock = RegisteredBlock {
         name: "Air",
         transparent: true,
@@ -64,6 +67,20 @@ impl Blocks {
         default_state: Voxel { id: 3 },
     };
 
+    pub const LOG: RegisteredBlock = RegisteredBlock {
+        name: "Log",
+        transparent: false,
+        solid: true,
+        texture_ids: [5, 5, 6, 6, 5, 5],
+        default_state: Voxel { id: 4 },
+    };
+
     pub const BLOCKS: &'static [RegisteredBlock] =
-        &[Self::AIR, Self::STONE, Self::GRASS_BLOCK, Self::DIRT_BLOCK];
+        &[
+            Self::AIR,
+            Self::STONE, 
+            Self::GRASS_BLOCK,
+            Self::DIRT_BLOCK,
+            Self::LOG
+        ];
 }
