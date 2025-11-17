@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use bytemuck::{Pod, Zeroable};
 use cgmath::Point2;
@@ -49,12 +49,13 @@ impl Vertex for DebugVertex {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub enum ModelName {
-    Cube, Line
+    Cube,
+    Line,
 }
 
 pub struct DebugDrawer {
     meshes: HashMap<ModelName, Mesh>,
-    debug_text: HashMap<&'static str, String>,
+    debug_text: BTreeMap<&'static str, String>,
     instances: HashMap<ModelName, Vec<DebugModelInstance>>,
     instance_buffer: wgpu::Buffer,
 }
@@ -80,7 +81,7 @@ impl DebugDrawer {
 
         Self {
             meshes,
-            debug_text: HashMap::new(),
+            debug_text: BTreeMap::new(),
             instances,
             instance_buffer,
         }

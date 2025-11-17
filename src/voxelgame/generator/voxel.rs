@@ -75,12 +75,11 @@ impl Blocks {
         default_state: Voxel { id: 4 },
     };
 
-    pub const BLOCKS: &'static [RegisteredBlock] =
-        &[
-            Self::AIR,
-            Self::STONE, 
-            Self::GRASS_BLOCK,
-            Self::DIRT_BLOCK,
-            Self::LOG
-        ];
+    pub const BLOCKS: &'static [RegisteredBlock] = &[
+        Self::AIR,
+        Self::STONE,
+        Self::GRASS_BLOCK,
+        Self::DIRT_BLOCK,
+        Self::LOG,
+    ];
 }

@@ -1,5 +1,6 @@
 use crate::voxelgame::{
-    generator::{WorldAccessor, chunk::Chunk}, mesh::{MeshInfo, Vertex3d}
+    generator::{chunk::Chunk, WorldAccessor},
+    mesh::{MeshInfo, Vertex3d},
 };
 
 use super::{
@@ -268,7 +269,11 @@ fn face(
 }
 
 #[inline]
-fn get_voxel_wrapper(chunk: &Chunk, coord: BlockOffsetCoord, accessor: &WorldAccessor) -> Option<Voxel> {
+fn get_voxel_wrapper(
+    chunk: &Chunk,
+    coord: BlockOffsetCoord,
+    accessor: &WorldAccessor,
+) -> Option<Voxel> {
     if coord.x < 0
         || coord.x >= CHUNK_SIZE as i32
         || coord.y < 0
@@ -313,26 +318,32 @@ pub fn generate_mesh_lod(
     let scale = step as f32;
 
     assert_eq!(
-        CHUNK_SIZE % step, 0,
-        "Chunk size of {} doesn't support LOD level {:?}", CHUNK_SIZE, lod_level
+        CHUNK_SIZE % step,
+        0,
+        "Chunk size of {} doesn't support LOD level {:?}",
+        CHUNK_SIZE,
+        lod_level
     );
-    
+
     for x in (0..CHUNK_SIZE as i32).step_by(step) {
         for y in (0..CHUNK_SIZE as i32).step_by(step) {
             for z in (0..CHUNK_SIZE as i32).step_by(step) {
                 let coord = BlockOffsetCoord { x, y, z };
-                let current_voxel = get_voxel_wrapper(&chunk, coord, &world_accessor)
-                    .unwrap_or_default();
+                let current_voxel =
+                    get_voxel_wrapper(&chunk, coord, &world_accessor).unwrap_or_default();
                 let current_block_info = Blocks::BLOCKS[current_voxel.id as usize];
-                
+
                 if current_block_info.transparent {
                     continue;
                 }
 
                 const SIDES: [FaceOrientation; 6] = [
-                    FaceOrientation::Left, FaceOrientation::Right,
-                    FaceOrientation::Top, FaceOrientation::Bottom,
-                    FaceOrientation::Back, FaceOrientation::Front,
+                    FaceOrientation::Left,
+                    FaceOrientation::Right,
+                    FaceOrientation::Top,
+                    FaceOrientation::Bottom,
+                    FaceOrientation::Back,
+                    FaceOrientation::Front,
                 ];
 
                 for side in SIDES {
@@ -344,9 +355,9 @@ pub fn generate_mesh_lod(
                         FaceOrientation::Back => coord.back(step as i32),
                         FaceOrientation::Front => coord.front(step as i32),
                     };
-                    
-                    let voxel = get_voxel_wrapper(&chunk, coord, &world_accessor)
-                        .unwrap_or_default();
+
+                    let voxel =
+                        get_voxel_wrapper(&chunk, coord, &world_accessor).unwrap_or_default();
 
                     let block_info = Blocks::BLOCKS[voxel.id as usize];
 
@@ -358,14 +369,12 @@ pub fn generate_mesh_lod(
                         );
                         idx.into_iter()
                             .for_each(|i| indices.push(i + vertices.len() as u32));
-                        vx.iter_mut()
-                            .for_each(|v| {
-                                v.position[0] *= scale;
-                                v.position[1] *= scale;
-                                v.position[2] *= scale;
-                            });
-                        vx.into_iter()
-                            .for_each(|v| vertices.push(v));
+                        vx.iter_mut().for_each(|v| {
+                            v.position[0] *= scale;
+                            v.position[1] *= scale;
+                            v.position[2] *= scale;
+                        });
+                        vx.into_iter().for_each(|v| vertices.push(v));
                     }
                 }
             }
@@ -376,8 +385,5 @@ pub fn generate_mesh_lod(
         return None;
     }
 
-    Some(MeshInfo {
-        vertices,
-        indices,
-    })
+    Some(MeshInfo { vertices, indices })
 }

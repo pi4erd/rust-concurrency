@@ -1,4 +1,9 @@
 [profile.release]
+# TODO: figure out a way to keep both debug and prod configurations
+# strip = true
+# opt-level = "z"
+# lto = true
+# panic = "abort"
 debug = true
 
 [package]

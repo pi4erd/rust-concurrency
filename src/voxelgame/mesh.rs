@@ -64,9 +64,7 @@ impl<T> MeshInfo<T> {
 
     #[deprecated = "Don't use"]
     pub fn transform_vertices(&mut self, f: fn(v: &mut T)) {
-        self.vertices
-            .iter_mut()
-            .for_each(f);
+        self.vertices.iter_mut().for_each(f);
     }
 
     pub fn merge(&mut self, mut rhs: Self) {

@@ -1,11 +1,11 @@
 mod camera;
 mod debug;
 mod draw;
+mod font;
 mod generator;
 mod mesh;
 mod tests;
 mod texture;
-mod font;
 
 use std::{collections::HashMap, sync::Arc, time::Instant};
 
@@ -83,16 +83,14 @@ impl<'w> VoxelGame<'w> {
             .expect("Failed to request adapter");
 
         let (device, queue) = adapter
-            .request_device(
-                &wgpu::DeviceDescriptor {
-                    label: Some("graphics_device"),
-                    memory_hints: wgpu::MemoryHints::Performance,
-                    required_features: wgpu::Features::POLYGON_MODE_LINE,
-                    required_limits: wgpu::Limits::default(),
-                    trace: wgpu::Trace::Off,
-                    experimental_features: wgpu::ExperimentalFeatures::disabled(),
-                },
-            )
+            .request_device(&wgpu::DeviceDescriptor {
+                label: Some("graphics_device"),
+                memory_hints: wgpu::MemoryHints::Performance,
+                required_features: wgpu::Features::POLYGON_MODE_LINE,
+                required_limits: wgpu::Limits::default(),
+                trace: wgpu::Trace::Off,
+                experimental_features: wgpu::ExperimentalFeatures::disabled(),
+            })
             .await
             .expect("Failed to request device");
 
@@ -121,10 +119,10 @@ impl<'w> VoxelGame<'w> {
         let text_queue = TextQueue::new(
             &device,
             &surface_config,
-
             // Thanks to JetBrains for creating this beautiful font, for free
-            include_bytes!("../../assets/fonts/JetBrainsMono-Regular.ttf")
-        ).expect("Failed to create TextQueue");
+            include_bytes!("../../assets/fonts/JetBrainsMono-Regular.ttf"),
+        )
+        .expect("Failed to create TextQueue");
 
         let camera = Camera::new(size.width as f32 / size.height as f32);
         let camera_controller = CameraController::new(5.0, 0.003);
@@ -148,8 +146,8 @@ impl<'w> VoxelGame<'w> {
 
         window.set_cursor_visible(false);
         match window.set_cursor_grab(CursorGrabMode::Locked) {
-            Ok(()) => {},
-            Err(e) => log::error!("No cursor lock available: {e}")
+            Ok(()) => {}
+            Err(e) => log::error!("No cursor lock available: {e}"),
         }
 
         Self {
@@ -484,21 +482,27 @@ impl<'w> VoxelGame<'w> {
     fn update(&mut self, delta: f32) {
         self.camera_controller.update(&mut self.camera, delta);
 
+        self.debug.set_text(
+            "camera.position",
+            format!(
+                "X: {:.2} Y: {:.2} Z: {:.2}",
+                self.camera.eye.x, self.camera.eye.y, self.camera.eye.z,
+            ),
+        );
+
         if self.generate {
-            self.world.enqueue_chunks_around(&self.camera, 5, 6);
+            self.world.enqueue_chunks_around(&self.camera, 8, 14);
         }
 
         self.world.receive_chunk();
-        
+
         self.world
             .dequeue_meshgen(64, &self.device, &self.queue, &self.bind_layouts["model"]);
 
         self.update_uniform_buffers();
 
         self.debug.new_frame();
-        self.world.append_debug(
-            &mut self.debug,
-        );
+        self.world.append_debug(&mut self.debug);
 
         let hit = self.world.ray_hit(
             Ray {
@@ -520,15 +524,22 @@ impl<'w> VoxelGame<'w> {
             let position_world: cgmath::Vector3<f32> = position.into();
             let hit_offset = hit_point - position_world;
 
-            let normal = if hit_offset.x.abs() > hit_offset.y.abs() && hit_offset.x.abs() > hit_offset.z.abs() {
+            let normal = if hit_offset.x.abs() > hit_offset.y.abs()
+                && hit_offset.x.abs() > hit_offset.z.abs()
+            {
                 cgmath::Vector3::<f32>::new(hit_offset.x.ceil(), 0.0, 0.0)
-            } else if hit_offset.y.abs() > hit_offset.x.abs() && hit_offset.y.abs() > hit_offset.z.abs() {
+            } else if hit_offset.y.abs() > hit_offset.x.abs()
+                && hit_offset.y.abs() > hit_offset.z.abs()
+            {
                 cgmath::Vector3::<f32>::new(0.0, hit_offset.y.ceil(), 0.0)
-            } else if hit_offset.z.abs() > hit_offset.x.abs() && hit_offset.z.abs() > hit_offset.y.abs() {
+            } else if hit_offset.z.abs() > hit_offset.x.abs()
+                && hit_offset.z.abs() > hit_offset.y.abs()
+            {
                 cgmath::Vector3::<f32>::new(0.0, 0.0, hit_offset.z.ceil())
             } else {
                 cgmath::Vector3::<f32>::new(1.0, 1.0, 1.0)
-            }.normalize();
+            }
+            .normalize();
 
             self.debug.append_mesh(
                 debug::ModelName::Cube,
@@ -552,7 +563,8 @@ impl<'w> VoxelGame<'w> {
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
 
-        { // 0
+        {
+            // 0
             let mut sky_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -577,7 +589,8 @@ impl<'w> VoxelGame<'w> {
         }
 
         let _chunks_drawn;
-        { // 1
+        {
+            // 1
             let mut opaque_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -609,9 +622,10 @@ impl<'w> VoxelGame<'w> {
             _chunks_drawn = self
                 .world
                 .draw_distance(&mut opaque_pass, self.camera.eye.to_vec(), 8);
-        } 
+        }
 
-        if self.draw_debug { // 2
+        if self.draw_debug {
+            // 2
             let mut debug_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -641,27 +655,27 @@ impl<'w> VoxelGame<'w> {
 
             self.debug.draw_3d(&mut debug_pass);
         }
-        
-        { // 3
+
+        {
+            // 3
             let mut ui_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("ui_pass"),
-                color_attachments: &[
-                    Some(wgpu::RenderPassColorAttachment {
-                        view: &view,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Load,
-                            store: wgpu::StoreOp::Store,
-                        },
-                        resolve_target: None,
-                        depth_slice: None,
-                    })
-                ],
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                    resolve_target: None,
+                    depth_slice: None,
+                })],
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
             });
 
-            self.text_queue.draw(&self.device, &self.queue, &mut ui_pass);
+            self.text_queue
+                .draw(&self.device, &self.queue, &mut ui_pass);
         }
 
         self.queue.submit([encoder.finish()]);
@@ -742,8 +756,8 @@ impl<'w> Game for VoxelGame<'w> {
                             if let Some((world_coord, _, _)) = hit {
                                 self.world.set_voxels_radius(
                                     world_coord,
-                                    10,
-                                    Blocks::AIR.default_state()
+                                    20,
+                                    Blocks::AIR.default_state(),
                                 );
                             }
                         }
@@ -759,12 +773,15 @@ impl<'w> Game for VoxelGame<'w> {
                             if let Some((world_coord, _, _)) = hit {
                                 // TODO: Fix block placement
                                 let _world_float_coord: cgmath::Vector3<f32> = world_coord.into();
-                                
+
                                 let normal = cgmath::Vector3::<f32>::new(0.0, 1.0, 0.0);
                                 let offset: BlockOffsetCoord = normal.into();
 
                                 log::info!("placed block with offset {:?}", offset);
-                                self.world.set_voxel(world_coord + offset, Blocks::DIRT_BLOCK.default_state());
+                                self.world.set_voxel(
+                                    world_coord + offset,
+                                    Blocks::DIRT_BLOCK.default_state(),
+                                );
                             }
                         }
                         _ => {}
@@ -798,8 +815,8 @@ impl<'w> Game for VoxelGame<'w> {
                             } else {
                                 self.window.set_cursor_visible(false);
                                 match self.window.set_cursor_grab(CursorGrabMode::Locked) {
-                                    Ok(()) => {},
-                                    Err(e) => log::error!("No cursor lock available: {e}")
+                                    Ok(()) => {}
+                                    Err(e) => log::error!("No cursor lock available: {e}"),
                                 }
                                 self.cursor_locked = true;
                             }

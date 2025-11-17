@@ -9,6 +9,7 @@ use std::{
         Arc, Mutex,
     },
     thread::{self, JoinHandle},
+    time::Duration,
 };
 
 use cgmath::{EuclideanSpace, MetricSpace};
@@ -18,7 +19,10 @@ use chunk::{Chunk, ChunkCoord, ChunkLocalCoord, WorldCoord, CHUNK_SIZE};
 use rand::Rng;
 use voxel::{Blocks, Voxel};
 
-use crate::voxelgame::{generator::{chunk::BlockOffsetCoord, meshgen::generate_mesh_lod}, mesh::{MeshInfo, Vertex3d}};
+use crate::voxelgame::{
+    generator::{chunk::BlockOffsetCoord, meshgen::generate_mesh_lod},
+    mesh::{MeshInfo, Vertex3d},
+};
 
 use super::{
     camera::Camera,
@@ -67,7 +71,7 @@ impl NoiseGenerator {
 impl Generator for NoiseGenerator {
     fn generate(&self, chunk: &mut Chunk) {
         const SCALE: f32 = 0.3;
-        
+
         let mut rng = rand::rng();
 
         for x in 0..CHUNK_SIZE {
@@ -121,7 +125,7 @@ impl Generator for NoiseGenerator {
                                             y: coord.y + k,
                                             z: coord.z,
                                         },
-                                        Blocks::LOG.default_state()
+                                        Blocks::LOG.default_state(),
                                     );
                                 }
                             }
@@ -151,10 +155,7 @@ pub struct WorldAccessor {
 }
 
 impl WorldAccessor {
-    pub fn get_voxel(
-        &self,
-        coord: WorldCoord,
-    ) -> Option<Voxel> {
+    pub fn get_voxel(&self, coord: WorldCoord) -> Option<Voxel> {
         let chunk_coord: ChunkCoord = coord.into();
         let local_coord: ChunkLocalCoord = coord.into();
 
@@ -192,13 +193,15 @@ impl<T> World<T> {
         let (mtx, mrx) = mpsc::channel::<(ChunkCoord, MeshInfo<Vertex3d>)>();
 
         let chunks = Arc::new(Mutex::new(HashMap::new()));
-        let world_accessor = WorldAccessor { chunks: chunks.clone() };
+        let world_accessor = WorldAccessor {
+            chunks: chunks.clone(),
+        };
 
         Self {
             generator: Arc::new(generator),
             chunks,
             world_accessor,
-            
+
             models: HashMap::new(),
             chunk_gen_queue: Arc::new(Mutex::new(Queue::new())),
 
@@ -238,7 +241,7 @@ impl<T> World<T> {
         let chunk = &lock.get(&chunk_coord)?;
         chunk.get_voxel(local_coord)
     }
-    
+
     pub fn set_voxels_radius(&mut self, center: WorldCoord, radius: u32, block: Voxel) {
         let mut chunks_affected: HashSet<ChunkCoord> = HashSet::new();
         let radius = radius as i32;
@@ -249,20 +252,18 @@ impl<T> World<T> {
             for j in -radius..radius {
                 for k in -radius..radius {
                     let offset_float = (i as f32, j as f32, k as f32);
-                    let dst_float = (
-                        offset_float.0 * offset_float.0 +
-                        offset_float.1 * offset_float.1 +
-                        offset_float.2 * offset_float.2
-                    ).sqrt();
+                    let dst_float = offset_float.0 * offset_float.0
+                        + offset_float.1 * offset_float.1
+                        + offset_float.2 * offset_float.2;
 
-                    if dst_float > radius as f32 { continue; }
+                    if dst_float > (radius * radius) as f32 {
+                        continue;
+                    }
 
-                    let offset = BlockOffsetCoord {
-                        x: i, y: j, z: k,
-                    };
+                    let offset = BlockOffsetCoord { x: i, y: j, z: k };
                     let world_coord = center + offset;
                     let chunk_coord: ChunkCoord = world_coord.into();
-                    let local_coord: ChunkLocalCoord = world_coord.into();                    
+                    let local_coord: ChunkLocalCoord = world_coord.into();
                     let chunk = lock.get_mut(&chunk_coord);
 
                     if let Some(chunk) = chunk {
@@ -434,21 +435,19 @@ impl<T> World<T> {
             let tx = self.chunk_sender.clone();
             let chunk_gen_queue = self.chunk_gen_queue.clone();
             let generator = self.generator.clone();
-            self.world_gen_threads.push(thread::spawn(move || {
-                loop {
-                    let chunk_to_generate: Option<ChunkCoord> = {
-                        let mut queue_lock = chunk_gen_queue.lock().unwrap();
-                        queue_lock.pop_front()
-                    };
+            self.world_gen_threads.push(thread::spawn(move || loop {
+                let chunk_to_generate: Option<ChunkCoord> =
+                    chunk_gen_queue.lock().unwrap().pop_front();
 
-                    if let Some(chunk_to_generate) = chunk_to_generate {
-                        let mut chunk = Box::new(Chunk::new(chunk_to_generate));
-                        generator.generate(&mut chunk);
+                if let Some(chunk_to_generate) = chunk_to_generate {
+                    let mut chunk = Box::new(Chunk::new(chunk_to_generate));
+                    generator.generate(&mut chunk);
 
-                        log::debug!("Generated chunk {}", chunk_to_generate);
+                    log::debug!("Generated chunk {}", chunk_to_generate);
 
-                        tx.send(chunk).expect("Channel was closed");
-                    }
+                    tx.send(chunk).expect("Channel was closed");
+                } else {
+                    thread::sleep(Duration::from_millis(1));
                 }
             }));
         }
@@ -457,19 +456,20 @@ impl<T> World<T> {
             let mesh_gen_queue = self.meshgen_queue.clone();
             let world_accessor = self.world_accessor.clone();
             let tx = self.mesh_sender.clone();
-            self.meshgen_threads.push(thread::spawn(move || {
-                loop {
-                    let coord: Option<ChunkCoord> = mesh_gen_queue.lock().unwrap().pop_front();
+            self.meshgen_threads.push(thread::spawn(move || loop {
+                let coord: Option<ChunkCoord> = mesh_gen_queue.lock().unwrap().pop_front();
 
-                    if let Some(mesh_to_gen) = coord {
-                        let chunk = world_accessor.chunks.lock().unwrap()[&mesh_to_gen].clone();
-                        let mesh = generate_mesh_lod(chunk, world_accessor.clone(), meshgen::LodLevel::_0);
-                        log::debug!("Finished meshing {}!", mesh_to_gen);
+                if let Some(mesh_to_gen) = coord {
+                    let chunk = world_accessor.chunks.lock().unwrap()[&mesh_to_gen].clone();
+                    let mesh =
+                        generate_mesh_lod(chunk, world_accessor.clone(), meshgen::LodLevel::_0);
+                    log::debug!("Finished meshing {}!", mesh_to_gen);
 
-                        if let Some(mesh) = mesh {
-                            tx.send((mesh_to_gen, mesh)).unwrap();
-                        }
+                    if let Some(mesh) = mesh {
+                        tx.send((mesh_to_gen, mesh)).unwrap();
                     }
+                } else {
+                    thread::sleep(Duration::from_millis(1));
                 }
             }));
         }
@@ -543,7 +543,9 @@ impl<T> World<T> {
             _ = self.models.insert(coord, model);
             self.models[&coord].update_buffer(queue);
 
-            if i >= limit { break; }
+            if i >= limit {
+                break;
+            }
         }
     }
 
