@@ -269,27 +269,27 @@ impl<T> World<T> {
                     if let Some(chunk) = chunk {
                         chunk.set_voxel(local_coord, block);
 
-                        if local_coord.left().is_none() {
+                        if local_coord.left().is_none() && lock.contains_key(&chunk_coord.left()) {
                             chunks_affected.insert(chunk_coord.left());
                         }
 
-                        if local_coord.right().is_none() {
+                        if local_coord.right().is_none() && lock.contains_key(&chunk_coord.right()) {
                             chunks_affected.insert(chunk_coord.right());
                         }
 
-                        if local_coord.up().is_none() {
+                        if local_coord.up().is_none() && lock.contains_key(&chunk_coord.up()) {
                             chunks_affected.insert(chunk_coord.up());
                         }
 
-                        if local_coord.down().is_none() {
+                        if local_coord.down().is_none() && lock.contains_key(&chunk_coord.down()) {
                             chunks_affected.insert(chunk_coord.down());
                         }
 
-                        if local_coord.front().is_none() {
+                        if local_coord.front().is_none() && lock.contains_key(&chunk_coord.front()) {
                             chunks_affected.insert(chunk_coord.front());
                         }
 
-                        if local_coord.back().is_none() {
+                        if local_coord.back().is_none() && lock.contains_key(&chunk_coord.back()) {
                             chunks_affected.insert(chunk_coord.back());
                         }
 
