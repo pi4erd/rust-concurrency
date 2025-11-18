@@ -142,7 +142,7 @@ impl<'w> VoxelGame<'w> {
         let mut rng = rand::rng();
         let mut world = World::new(NoiseGenerator::new(rng.random_range(i32::MIN..i32::MAX)));
 
-        world.dispatch_threads(5, 3);
+        world.dispatch_threads(4, 4);
 
         window.set_cursor_visible(false);
         match window.set_cursor_grab(CursorGrabMode::Locked) {
@@ -491,8 +491,14 @@ impl<'w> VoxelGame<'w> {
         );
 
         if self.generate {
-            self.world.enqueue_chunks_around(&self.camera, 8, 14);
+            self.world.unload_distance(self.camera.eye.to_vec(), 20);
+            self.world.enqueue_chunks_around(&self.camera, 6, 8);
         }
+
+        self.debug.set_text(
+            "chunks.count",
+            format!("Chunk count: {}", self.world.get_chunk_count()),
+        );
 
         self.world.receive_chunk();
 
