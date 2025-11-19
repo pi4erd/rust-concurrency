@@ -492,13 +492,8 @@ impl<'w> VoxelGame<'w> {
 
         if self.generate {
             self.world.unload_distance(self.camera.eye.to_vec(), 20);
-            self.world.enqueue_chunks_around(&self.camera, 6, 8);
+            self.world.enqueue_chunks_around(&self.camera, 14, 10);
         }
-
-        self.debug.set_text(
-            "chunks.count",
-            format!("Chunk count: {}", self.world.get_chunk_count()),
-        );
 
         self.world.receive_chunk();
 
@@ -594,7 +589,7 @@ impl<'w> VoxelGame<'w> {
             sky_pass.draw(0..4, 0..1);
         }
 
-        let _chunks_drawn;
+        let chunks_drawn;
         {
             // 1
             let mut opaque_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -625,10 +620,13 @@ impl<'w> VoxelGame<'w> {
             opaque_pass.set_bind_group(1, &self.bind_groups["terrain_texture"], &[]);
             opaque_pass.set_bind_group(2, &self.bind_groups["camera"], &[]);
 
-            _chunks_drawn = self
+            chunks_drawn = self
                 .world
                 .draw_distance(&mut opaque_pass, self.camera.eye.to_vec(), 8);
         }
+
+        self.debug
+            .set_text("chunks.drawn", format!("Chunks drawn: {}", chunks_drawn,));
 
         if self.draw_debug {
             // 2

@@ -48,11 +48,21 @@ impl NoiseSampler {
     }
 
     pub fn sample(&self, chunk_coord: ChunkCoord, x: f32, y: f32, z: f32, scale: f32) -> f32 {
-        self.noise.get_noise_3d(
-            ((chunk_coord.x as f32 * CHUNK_SIZE as f32) + x) * scale,
-            ((chunk_coord.y as f32 * CHUNK_SIZE as f32) + y) * scale,
-            ((chunk_coord.z as f32 * CHUNK_SIZE as f32) + z) * scale,
-        )
+        const OCTAVES: usize = 4;
+
+        let mut total = 0.0;
+        for i in 0..OCTAVES {
+            let scale = scale * 2.0f32.powi(i as i32);
+            let magnitude = 1.0 / 2.0f32.powi(i as i32 + 1);
+
+            total += self.noise.get_noise_3d(
+                ((chunk_coord.x as f32 * CHUNK_SIZE as f32) + x) * scale,
+                ((chunk_coord.y as f32 * CHUNK_SIZE as f32) + y) * scale,
+                ((chunk_coord.z as f32 * CHUNK_SIZE as f32) + z) * scale,
+            ) * magnitude;
+        }
+
+        total
     }
 }
 
@@ -273,7 +283,8 @@ impl<T> World<T> {
                             chunks_affected.insert(chunk_coord.left());
                         }
 
-                        if local_coord.right().is_none() && lock.contains_key(&chunk_coord.right()) {
+                        if local_coord.right().is_none() && lock.contains_key(&chunk_coord.right())
+                        {
                             chunks_affected.insert(chunk_coord.right());
                         }
 
@@ -285,7 +296,8 @@ impl<T> World<T> {
                             chunks_affected.insert(chunk_coord.down());
                         }
 
-                        if local_coord.front().is_none() && lock.contains_key(&chunk_coord.front()) {
+                        if local_coord.front().is_none() && lock.contains_key(&chunk_coord.front())
+                        {
                             chunks_affected.insert(chunk_coord.front());
                         }
 
@@ -300,14 +312,10 @@ impl<T> World<T> {
         }
 
         let mut lock = self.meshgen_queue.lock().unwrap();
-        chunks_affected
-            .iter()
-            .for_each(|c| lock.push_front(*c));
+        chunks_affected.iter().for_each(|c| lock.push_front(*c));
 
         let mut lock = self.meshed_chunks.lock().unwrap();
-        chunks_affected
-            .iter()
-            .for_each(|c| _ = lock.remove(c));
+        chunks_affected.iter().for_each(|c| _ = lock.remove(c));
     }
 
     pub fn set_voxel(&mut self, position: WorldCoord, block: Voxel) {
@@ -352,14 +360,10 @@ impl<T> World<T> {
         }
 
         let mut lock = self.meshgen_queue.lock().unwrap();
-        chunks_to_remesh
-            .iter()
-            .for_each(|c| lock.push_front(*c));
+        chunks_to_remesh.iter().for_each(|c| lock.push_front(*c));
 
         let mut lock = self.meshed_chunks.lock().unwrap();
-        chunks_to_remesh
-            .iter()
-            .for_each(|c| _ = lock.remove(c));
+        chunks_to_remesh.iter().for_each(|c| _ = lock.remove(c));
     }
 
     pub fn get_chunk_count(&self) -> usize {
@@ -556,16 +560,12 @@ impl<T> World<T> {
         }
     }
 
-    pub fn unload_distance(
-        &mut self,
-        eye: cgmath::Vector3<f32>,
-        max_distance_chunks: usize,
-    ) {
+    pub fn unload_distance(&mut self, eye: cgmath::Vector3<f32>, max_distance_chunks: usize) {
         let mut coords_to_delete: Vec<ChunkCoord> = Vec::new();
 
         for coord in self.models.keys() {
-            let position: cgmath::Vector3<f32> = (*coord).into(); // rust being weird
-             
+            let position: cgmath::Vector3<f32> = (*coord).into();
+
             if position.distance(eye) > max_distance_chunks as f32 * CHUNK_SIZE as f32 {
                 coords_to_delete.push(*coord);
             }
@@ -576,9 +576,7 @@ impl<T> World<T> {
             .for_each(|c| _ = self.models.remove(c));
 
         let mut lock = self.meshed_chunks.lock().unwrap();
-        coords_to_delete
-            .iter()
-            .for_each(|c| _ = lock.remove(c));
+        coords_to_delete.iter().for_each(|c| _ = lock.remove(c));
     }
 
     // Returns a number of chunks drawn
@@ -590,8 +588,14 @@ impl<T> World<T> {
     ) -> usize {
         let mut count = 0;
         for (coord, model) in self.models.iter() {
-            let position: cgmath::Vector3<f32> = (*coord).into(); // rust being weird
-            if position.distance(eye) > (max_distance_chunks as f32 * CHUNK_SIZE as f32) {
+            let position: cgmath::Vector3<f32> = (*coord).into();
+
+            let h_position = cgmath::Vector3::new(position.x, 0.0, position.z);
+            let h_eye = cgmath::Vector3::new(eye.x, 0.0, eye.z);
+
+            if h_position.distance(h_eye) > (max_distance_chunks as f32 * CHUNK_SIZE as f32)
+                || (position.y - eye.y).abs() > (max_distance_chunks as f32 * CHUNK_SIZE as f32)
+            {
                 continue;
             }
             // log::debug!("Drawing chunk at {}", coord);
@@ -624,6 +628,10 @@ impl<T> World<T> {
             "Chunk Queue size: {}",
             self.chunk_gen_queue.lock().unwrap().len(),
         );
+        let chunks_count_text = format!("Chunk count: {}", self.chunks.lock().unwrap().len(),);
+        let mesh_count_text = format!("Loaded meshes count: {}", self.models.len(),);
+        debug.set_text("chunks.count", chunks_count_text);
+        debug.set_text("models.count", mesh_count_text);
         debug.set_text("world.meshgen_queue_size", meshgen_queue_text);
         debug.set_text("world.worldgen_queue_size", chunk_queue_text);
     }
