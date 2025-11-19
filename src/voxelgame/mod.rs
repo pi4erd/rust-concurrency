@@ -200,7 +200,7 @@ impl<'w> VoxelGame<'w> {
 
     fn create_textures(device: &wgpu::Device, queue: &wgpu::Queue) -> HashMap<String, Texture2d> {
         let terrain_texture = Texture2d::from_image_bytes(
-            include_bytes!("../../assets/textureatlas.png"),
+            include_bytes!("../../assets/textures/textureatlas.png"),
             device,
             queue,
             Some("terrain_texture"),

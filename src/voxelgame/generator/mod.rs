@@ -47,7 +47,18 @@ impl NoiseSampler {
         }
     }
 
-    pub fn sample(&self, chunk_coord: ChunkCoord, x: f32, y: f32, z: f32, scale: f32) -> f32 {
+
+    /// Samples a noise value at 2d coordinates discarding Y of `chunk_coord`.
+    /// 
+    /// Returns value between `-1.0..1.0`.
+    pub fn sample_2d(&self, chunk_coord: ChunkCoord, x: f32, z: f32, scale: f32) -> f32 {
+        self.sample_3d(ChunkCoord { y: 0, ..chunk_coord }, x, 0.0, z, scale)
+    }
+
+    /// Samples a noise value at 3d coordinates.
+    /// 
+    /// Returns value between `-1.0..1.0`.
+    pub fn sample_3d(&self, chunk_coord: ChunkCoord, x: f32, y: f32, z: f32, scale: f32) -> f32 {
         const OCTAVES: usize = 4;
 
         let mut total = 0.0;
@@ -87,17 +98,19 @@ impl Generator for NoiseGenerator {
         for x in 0..CHUNK_SIZE {
             for z in 0..CHUNK_SIZE {
                 let height_sample = 40.0
-                    + self.sampler.sample(
-                        ChunkCoord {
-                            x: chunk.coord.x,
-                            y: 0,
-                            z: chunk.coord.z,
-                        },
+                    + self.sampler.sample_2d(
+                        chunk.coord,
                         x as f32,
-                        0.0,
                         z as f32,
                         SCALE,
                     ) * 90.0;
+                
+                let sandy = self.sampler.sample_2d(
+                    chunk.coord,
+                    x as f32,
+                    z as f32,
+                    SCALE * 6.0,
+                );
 
                 for y in 0..CHUNK_SIZE {
                     let wy = chunk.coord.y as i32 * CHUNK_SIZE as i32 + y as i32;
@@ -105,7 +118,7 @@ impl Generator for NoiseGenerator {
                     let coord = ChunkLocalCoord { x, y, z };
 
                     if wy <= height_sample as i32 {
-                        let cave_sample = self.sampler.sample(
+                        let cave_sample = self.sampler.sample_3d(
                             chunk.coord,
                             x as f32,
                             y as f32,
@@ -113,7 +126,7 @@ impl Generator for NoiseGenerator {
                             SCALE * 4.0,
                         );
 
-                        let caviness = self.sampler.sample(
+                        let caviness = self.sampler.sample_3d(
                             chunk.coord,
                             x as f32,
                             y as f32,
@@ -127,7 +140,7 @@ impl Generator for NoiseGenerator {
                         }
 
                         if wy - height_sample as i32 >= 0 {
-                            if rng.random_bool(0.0001) {
+                            if rng.random_bool(0.001) {
                                 for k in 0..10 {
                                     chunk.set_voxel(
                                         ChunkLocalCoord {
@@ -139,7 +152,12 @@ impl Generator for NoiseGenerator {
                                     );
                                 }
                             }
-                            chunk.set_voxel(coord, Blocks::GRASS_BLOCK.default_state());
+                            
+                            if sandy < -0.5 {
+                                chunk.set_voxel(coord, Blocks::SAND.default_state());
+                            } else {
+                                chunk.set_voxel(coord, Blocks::GRASS_BLOCK.default_state());
+                            }
                         } else if wy - height_sample as i32 >= -2 {
                             chunk.set_voxel(coord, Blocks::DIRT_BLOCK.default_state());
                         } else {

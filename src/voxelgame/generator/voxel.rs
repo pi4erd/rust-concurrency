@@ -75,11 +75,20 @@ impl Blocks {
         default_state: Voxel { id: 4 },
     };
 
+    pub const SAND: RegisteredBlock = RegisteredBlock {
+        name: "Sand",
+        transparent: false,
+        solid: true,
+        texture_ids: [7; 6],
+        default_state: Voxel { id: 5 },
+    };
+
     pub const BLOCKS: &'static [RegisteredBlock] = &[
         Self::AIR,
         Self::STONE,
         Self::GRASS_BLOCK,
         Self::DIRT_BLOCK,
         Self::LOG,
+        Self::SAND,
     ];
 }
